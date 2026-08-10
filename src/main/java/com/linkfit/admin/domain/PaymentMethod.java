@@ -1,0 +1,16 @@
+package com.linkfit.admin.domain;
+
+public class PaymentMethod {
+    private Long id;
+    private String name;
+    private int sortOrder;
+
+    public PaymentMethod() {}
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public int getSortOrder() { return sortOrder; }
+    public void setSortOrder(int sortOrder) { this.sortOrder = sortOrder; }
+}
