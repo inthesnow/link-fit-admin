@@ -13,10 +13,12 @@ public interface ReRegistrationMapper {
 
     List<ReRegistration> findAll(@Param("gymId") Long gymId, @Param("status") String status,
                                   @Param("reason") String reason,
-                                  @Param("minDays") Integer minDays, @Param("maxDays") Integer maxDays,
+                                  @Param("expiryStatus") String expiryStatus,
+                                  @Param("startDate") String startDate, @Param("endDate") String endDate,
                                   @Param("offset") int offset, @Param("size") int size);
     long count(@Param("gymId") Long gymId, @Param("status") String status, @Param("reason") String reason,
-               @Param("minDays") Integer minDays, @Param("maxDays") Integer maxDays);
+               @Param("expiryStatus") String expiryStatus,
+               @Param("startDate") String startDate, @Param("endDate") String endDate);
 
     // 대상자/등록완료/만료 — 실제 회원권 만료일(membership.end_date) 기준 집계
     Map<String, Object> summaryByMembership(@Param("gymId") Long gymId);

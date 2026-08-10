@@ -8,8 +8,8 @@ import java.util.Optional;
 
 public interface ReRegistrationService {
     List<ReRegistration> findAll(Long gymId, String status, String reason,
-                                  Integer minDays, Integer maxDays, int page, int size);
-    long count(Long gymId, String status, String reason, Integer minDays, Integer maxDays);
+                                  String expiryStatus, String startDate, String endDate, int page, int size);
+    long count(Long gymId, String status, String reason, String expiryStatus, String startDate, String endDate);
     Optional<ReRegistration> findById(String id);
     void updateStatus(String id, String status);
     void updateMemo(String id, String memo);

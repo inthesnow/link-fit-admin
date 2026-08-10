@@ -123,12 +123,12 @@ class MyBatisReRegistrationServiceTest {
 
     @Test
     void findAll_delegatesToMapper() {
-        when(mapper.findAll(1L, "pending", "membership_expiry", null, null, 0, 10))
+        when(mapper.findAll(1L, "pending", "membership_expiry", null, null, null, 0, 10))
                 .thenReturn(Collections.emptyList());
 
-        service.findAll(1L, "pending", "membership_expiry", null, null, 0, 10);
+        service.findAll(1L, "pending", "membership_expiry", null, null, null, 0, 10);
 
-        verify(mapper).findAll(1L, "pending", "membership_expiry", null, null, 0, 10);
+        verify(mapper).findAll(1L, "pending", "membership_expiry", null, null, null, 0, 10);
     }
 
     @Test

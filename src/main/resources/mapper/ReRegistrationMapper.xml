@@ -42,12 +42,19 @@
           ) me ON me.user_id = r.member_id
     </sql>
 
-    <sql id="daysLeftFilter">
-        <if test="minDays != null">
-            AND DATEDIFF(me.end_date, CURDATE()) &gt;= #{minDays}
+    <!-- expiryStatus: 'expiring'(만료예정, 만료일까지 0~30일 남음) / 'expired'(만료, 만료일 경과 또는 이력 없음) -->
+    <sql id="expiryFilter">
+        <if test="expiryStatus == 'expiring'">
+            AND me.end_date IS NOT NULL AND me.end_date &gt;= CURDATE() AND DATEDIFF(me.end_date, CURDATE()) &lt;= 30
         </if>
-        <if test="maxDays != null">
-            AND DATEDIFF(me.end_date, CURDATE()) &lt;= #{maxDays}
+        <if test="expiryStatus == 'expired'">
+            AND (me.end_date IS NULL OR me.end_date &lt; CURDATE())
+        </if>
+        <if test="startDate != null and startDate != ''">
+            AND me.end_date &gt;= #{startDate}
+        </if>
+        <if test="endDate != null and endDate != ''">
+            AND me.end_date &lt;= #{endDate}
         </if>
     </sql>
 
@@ -60,7 +67,7 @@
         <if test="reason != null and reason != ''">
            AND r.reason = #{reason}
         </if>
-        <include refid="daysLeftFilter"/>
+        <include refid="expiryFilter"/>
          ORDER BY r.created_at DESC
          LIMIT #{size} OFFSET #{offset}
     </select>
@@ -78,7 +85,7 @@
         <if test="reason != null and reason != ''">
            AND r.reason = #{reason}
         </if>
-        <include refid="daysLeftFilter"/>
+        <include refid="expiryFilter"/>
     </select>
 
     <select id="summaryByMembership" resultType="map">

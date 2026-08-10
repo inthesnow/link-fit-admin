@@ -29,16 +29,17 @@ public class ReRegistrationApiController {
     public ApiResponse<Map<String, Object>> list(
             @RequestParam(defaultValue = "") String status,
             @RequestParam(defaultValue = "") String reason,
-            @RequestParam(required = false) Integer minDays,
-            @RequestParam(required = false) Integer maxDays,
+            @RequestParam(required = false) String expiryStatus,
+            @RequestParam(required = false) String startDate,
+            @RequestParam(required = false) String endDate,
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
             @AuthenticationPrincipal CrmUserDetails principal) {
-        log.info("[ReRegistration] GET /api/reregistration - status={}, reason={}, minDays={}, maxDays={}",
-                status, reason, minDays, maxDays);
+        log.info("[ReRegistration] GET /api/reregistration - status={}, reason={}, expiryStatus={}, startDate={}, endDate={}",
+                status, reason, expiryStatus, startDate, endDate);
         Long gymId = principal.getGymId();
-        List<ReRegistration> list = service.findAll(gymId, status, reason, minDays, maxDays, page, size);
-        long total = service.count(gymId, status, reason, minDays, maxDays);
+        List<ReRegistration> list = service.findAll(gymId, status, reason, expiryStatus, startDate, endDate, page, size);
+        long total = service.count(gymId, status, reason, expiryStatus, startDate, endDate);
         return ApiResponse.ok(Map.of("items", list, "total", total, "page", page, "size", size));
     }
 

@@ -45,12 +45,16 @@
             <option value="failed">실패</option>
             <option value="hold">보류</option>
         </select>
+        <select class="filter-select" id="expiryFilter" onchange="currentPage=0;loadList()">
+            <option value="">전체 만료상태</option>
+            <option value="expiring">만료예정 (30일 이내)</option>
+            <option value="expired">만료</option>
+        </select>
         <div class="days-left-filter">
-            <span class="days-left-label">잔여기간</span>
-            <input type="number" class="form-input days-left-input" id="minDays" placeholder="0" onkeyup="if(event.key==='Enter'){currentPage=0;loadList()}">
+            <span class="days-left-label">만료일 기간</span>
+            <input type="date" class="form-input" id="startDate" onchange="currentPage=0;loadList()">
             <span>~</span>
-            <input type="number" class="form-input days-left-input" id="maxDays" placeholder="100" onkeyup="if(event.key==='Enter'){currentPage=0;loadList()}">
-            <span>일</span>
+            <input type="date" class="form-input" id="endDate" onchange="currentPage=0;loadList()">
             <button class="btn btn-secondary" onclick="currentPage=0;loadList()">조회</button>
         </div>
     </div>
@@ -62,7 +66,7 @@
                     <th>회원명</th>
                     <th>전화번호</th>
                     <th>상태</th>
-                    <th>등록일자</th>
+                    <th>만료일</th>
                     <th>등록상품</th>
                     <th>구독권정보</th>
                     <th>메모보기</th>
@@ -137,9 +141,9 @@
 .summary-card.warning .sc-val { color: var(--warning); }
 .sc-val { font-size: 24px; font-weight: 700; color: var(--accent); }
 .sc-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-.days-left-filter { display: flex; align-items: center; gap: 6px; }
-.days-left-label { font-size: 13px; color: var(--text-secondary); margin-right: 2px; }
-.days-left-input { width: 70px; text-align: center; }
+.days-left-filter { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: nowrap; }
+.days-left-label { font-size: 13px; color: var(--text-secondary); margin-right: 2px; white-space: nowrap; flex-shrink: 0; }
+.days-left-filter input[type="date"] { flex-shrink: 0; }
 </style>
 
 <script>
@@ -149,6 +153,14 @@ let editingId   = null;
 
 function csrfHeaders(extra) {
     return Object.assign({ 'Content-Type': 'application/json' }, extra);
+}
+
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
 }
 
 const statusLabel = {
@@ -177,11 +189,24 @@ const tierBadge = { BASIC: 'badge-pending', LIGHT_FIT: 'badge-active', REGULAR_F
 
 let currentItems = [];
 
-// 유효/만료: 실제 회원권 만료일(membershipEnd) 기준. 만료일이 없으면 만료로 간주(등록 이력 없음).
-function validityBadge(r) {
-    const today = new Date().toISOString().split('T')[0];
-    const valid = r.membershipEnd && r.membershipEnd >= today;
-    return `<span class="badge ${valid ? 'badge-active' : 'badge-expired'}">${valid ? '유효' : '만료'}</span>`;
+// 만료예정: 오늘 <= 만료일 <= 오늘+30일. 만료: 만료일 경과 또는 이력 없음. 그 외(30일 초과 남음): 유효.
+function expiryInfo(r) {
+    if (!r.membershipEnd) {
+        return { state: 'expired', label: '만료', detail: '이용권 없음' };
+    }
+    const end = new Date(r.membershipEnd + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diffDays = Math.round((end - today) / 86400000);
+    if (diffDays < 0)  return { state: 'expired',  label: '만료',     detail: `${-diffDays}일 경과` };
+    if (diffDays <= 30) return { state: 'expiring', label: '만료예정', detail: `D-${diffDays}` };
+    return { state: 'valid', label: '유효', detail: `D-${diffDays}` };
+}
+function expiryBadge(r) {
+    const info = expiryInfo(r);
+    const cls = info.state === 'expired' ? 'badge-expired' : info.state === 'expiring' ? 'badge-pending' : 'badge-active';
+    return `<span class="badge ${cls}">${info.label}</span>`
+         + `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${info.detail}</div>`;
 }
 
 async function loadSummary() {
@@ -195,12 +220,14 @@ async function loadSummary() {
 }
 
 async function loadList() {
-    const status  = document.getElementById('statusFilter').value;
-    const minDays = document.getElementById('minDays').value;
-    const maxDays = document.getElementById('maxDays').value;
+    const status       = document.getElementById('statusFilter').value;
+    const expiryStatus = document.getElementById('expiryFilter').value;
+    const startDate     = document.getElementById('startDate').value;
+    const endDate        = document.getElementById('endDate').value;
     let url = `/api/reregistration?status=${status}&page=${currentPage}&size=${pageSize}`;
-    if (minDays !== '') url += `&minDays=${encodeURIComponent(minDays)}`;
-    if (maxDays !== '') url += `&maxDays=${encodeURIComponent(maxDays)}`;
+    if (expiryStatus !== '') url += `&expiryStatus=${encodeURIComponent(expiryStatus)}`;
+    if (startDate !== '')    url += `&startDate=${encodeURIComponent(startDate)}`;
+    if (endDate !== '')      url += `&endDate=${encodeURIComponent(endDate)}`;
     const res  = await fetch(url);
     const json = await res.json();
     if (!json.success) return;
@@ -218,9 +245,9 @@ function renderTable(items, total) {
     tbody.innerHTML = items.map(r => `
         <tr>
             <td>${escHtml(r.memberName || r.memberId)}</td>
-            <td>${r.memberPhone || '-'}</td>
-            <td>${validityBadge(r)}</td>
-            <td>${fmtDate(r.createdAt)}</td>
+            <td>${formatPhone(r.memberPhone) || '-'}</td>
+            <td>${expiryBadge(r)}</td>
+            <td>${r.membershipEnd || '-'}</td>
             <td>${r.productName ? escHtml(r.productName) : '<span style="color:var(--text-muted)">-</span>'}</td>
             <td><span class="badge ${tierBadge[r.tier] || 'badge-pending'}">${tierLabel[r.tier] || r.tier || '-'}</span></td>
             <td>

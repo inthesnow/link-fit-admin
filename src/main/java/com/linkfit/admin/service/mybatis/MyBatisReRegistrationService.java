@@ -25,13 +25,13 @@ public class MyBatisReRegistrationService implements ReRegistrationService {
 
     @Override
     public List<ReRegistration> findAll(Long gymId, String status, String reason,
-                                         Integer minDays, Integer maxDays, int page, int size) {
-        return mapper.findAll(gymId, status, reason, minDays, maxDays, page * size, size);
+                                         String expiryStatus, String startDate, String endDate, int page, int size) {
+        return mapper.findAll(gymId, status, reason, expiryStatus, startDate, endDate, page * size, size);
     }
 
     @Override
-    public long count(Long gymId, String status, String reason, Integer minDays, Integer maxDays) {
-        return mapper.count(gymId, status, reason, minDays, maxDays);
+    public long count(Long gymId, String status, String reason, String expiryStatus, String startDate, String endDate) {
+        return mapper.count(gymId, status, reason, expiryStatus, startDate, endDate);
     }
 
     @Override
