@@ -1,6 +1,7 @@
 package com.linkfit.admin.controller.api;
 
 import com.linkfit.admin.common.ApiResponse;
+import com.linkfit.admin.domain.Sale;
 import com.linkfit.admin.mapper.SaleMapper;
 import com.linkfit.admin.mapper.TicketPurchaseMapper;
 import jakarta.servlet.http.HttpServletResponse;
@@ -78,7 +79,31 @@ public class RevenueApiController {
     }
 
     // ── 환불 처리 ─────────────────────────────────────────────────
+    // 회원관리의 "회수"(이용권 삭제)와는 완전히 별개의 동작이다. 환불은 매출 기록(sale)만 대상으로 하며,
+    // 회원이 실제로 보유한 이용권/상품(membership)에는 전혀 영향을 주지 않는다.
 
+    @PostMapping("/sales/{id}/refund")
+    public ApiResponse<Void> refund(@PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
+        log.info("[Revenue] POST /api/revenue/sales/{id}/refund - id={}, body={}", id, body);
+        Sale sale = saleMapper.findById(id).orElse(null);
+        if (sale == null) {
+            return ApiResponse.error("결제 내역을 찾을 수 없습니다.");
+        }
+        if (sale.getRefundedAt() != null) {
+            return ApiResponse.error("이미 환불 처리된 내역입니다.");
+        }
+        int remaining = sale.getAmount() - sale.getRefundAmount();
+        Object rawAmount = body == null ? null : body.get("amount");
+        int refundAmount = rawAmount == null ? remaining : ((Number) rawAmount).intValue();
+        if (refundAmount <= 0 || refundAmount > remaining) {
+            return ApiResponse.error("환불 금액은 1원 이상 " + remaining + "원 이하여야 합니다.");
+        }
+        String reason = body == null || body.get("reason") == null ? null : body.get("reason").toString().trim();
+        saleMapper.refund(id, refundAmount, (reason == null || reason.isEmpty()) ? null : reason);
+        return ApiResponse.ok();
+    }
+
+    // 잘못 등록된 매출 기록을 완전히 지우는 용도 (환불과 별개, 이력이 남지 않으므로 데이터 오류 정정에만 사용)
     @DeleteMapping("/sales/{id}")
     public ApiResponse<Void> deleteSale(@PathVariable Long id) {
         log.info("[Revenue] DELETE /api/revenue/sales/{id} - id={}", id);
@@ -104,10 +129,10 @@ public class RevenueApiController {
         // BOM for Excel UTF-8
         response.getOutputStream().write(new byte[]{(byte)0xEF, (byte)0xBB, (byte)0xBF});
         PrintWriter pw = new PrintWriter(response.getWriter());
-        pw.println("번호,날짜,회원명,상품명,유형,금액,결제수단,메모");
+        pw.println("번호,날짜,회원명,상품명,유형,금액,결제수단,환불여부,메모");
         int i = 1;
         for (Map<String, Object> r : data) {
-            pw.printf("%d,%s,%s,%s,%s,%s,%s,%s%n",
+            pw.printf("%d,%s,%s,%s,%s,%s,%s,%s,%s%n",
                     i++,
                     r.getOrDefault("saleDate", ""),
                     esc(r.get("memberName")),
@@ -115,6 +140,7 @@ public class RevenueApiController {
                     esc(r.get("productType")),
                     r.getOrDefault("amount", 0),
                     esc(r.get("paymentMethod")),
+                    r.get("refundedAt") != null ? "환불" : "",
                     esc(r.get("memo")));
         }
         pw.flush();

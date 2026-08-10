@@ -115,6 +115,8 @@
                     <select class="form-select" id="cRegType">
                         <option value="new">신규</option>
                         <option value="re">재등록</option>
+                        <option value="re_inflow">재유입</option>
+                        <option value="single_item">단품결제</option>
                         <option value="referral">추천</option>
                     </select>
                 </div>
@@ -179,7 +181,7 @@ let currentMonth = new Date().toISOString().substring(0, 7);
 function csrfHeaders(e) { return Object.assign({'Content-Type':'application/json'}, e); }
 
 const typeLabel = { membership:'이용권', pt:'PT', feedback_ticket:'피드백 티켓' };
-const regLabel  = { new:'신규', re:'재등록', referral:'추천' };
+const regLabel  = { new:'신규', re:'재등록', re_inflow:'재유입', single_item:'단품결제', referral:'추천' };
 const typeBadge = { membership:'badge-active', pt:'badge-admin', feedback_ticket:'badge-pending' };
 
 function updateMonthLabel() {

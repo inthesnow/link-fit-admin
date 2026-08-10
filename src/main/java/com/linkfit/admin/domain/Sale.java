@@ -11,9 +11,12 @@ public class Sale {
     private String productName;
     private String productType;    // MEMBERSHIP, GROUP, PT, LOCKER, ITEM
     private int amount;
+    private int refundAmount;
     private String paymentMethod;  // CARD, CASH, TRANSFER
     private LocalDate saleDate;
     private String memo;
+    private LocalDateTime refundedAt;
+    private String refundReason;
     private LocalDateTime createdAt;
 
     public Sale() {}
@@ -32,12 +35,18 @@ public class Sale {
     public void setProductType(String productType) { this.productType = productType; }
     public int getAmount() { return amount; }
     public void setAmount(int amount) { this.amount = amount; }
+    public int getRefundAmount() { return refundAmount; }
+    public void setRefundAmount(int refundAmount) { this.refundAmount = refundAmount; }
     public String getPaymentMethod() { return paymentMethod; }
     public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
     public LocalDate getSaleDate() { return saleDate; }
     public void setSaleDate(LocalDate saleDate) { this.saleDate = saleDate; }
     public String getMemo() { return memo; }
     public void setMemo(String memo) { this.memo = memo; }
+    public LocalDateTime getRefundedAt() { return refundedAt; }
+    public void setRefundedAt(LocalDateTime refundedAt) { this.refundedAt = refundedAt; }
+    public String getRefundReason() { return refundReason; }
+    public void setRefundReason(String refundReason) { this.refundReason = refundReason; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Mapper
 public interface SaleMapper {
@@ -14,6 +15,11 @@ public interface SaleMapper {
                                             @Param("date") String date,
                                             @Param("period") String period);
     void insert(Sale sale);
+
+    Optional<Sale> findById(@Param("id") Long id);
+
+    // 환불 처리 (전액/부분 환불, 판매 기록은 삭제하지 않고 이력 보존)
+    void refund(@Param("id") Long id, @Param("refundAmount") int refundAmount, @Param("reason") String reason);
 
     // 결제 내역 페이징
     List<Map<String, Object>> findPaged(@Param("type") String type,

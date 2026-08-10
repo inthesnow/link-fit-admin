@@ -354,30 +354,47 @@ async function loadMemberStats() {
 
 async function loadAttendStats() {
     try {
-        const res = await fetch(`/api/dashboard/attendance?date=${fmt(new Date())}&period=monthly`);
-        const { data } = await res.json();
-        const pct = data.attendanceRate || Math.round((data.total||0)/Math.max(data.totalMembers||1,1)*100);
+        const today = fmt(new Date());
+        const [attendRes, memberRes, routineRes] = await Promise.all([
+            fetch(`/api/dashboard/attendance?date=${today}&period=daily`),
+            fetch(`/api/members?status=ACTIVE&page=0&size=1`),
+            fetch(`/api/dashboard/routine-compliance?days=30`)
+        ]);
+        const { data: attendData } = await attendRes.json();
+        const { data: memberData } = await memberRes.json();
+        const { data: routineData } = await routineRes.json();
+
+        const attended     = attendData?.total || 0;
+        const totalMembers = memberData?.total || 0;
+        const pct = totalMembers > 0 ? Math.round(attended / totalMembers * 100) : 0;
         document.getElementById('pctAttend').textContent = pct + '%';
-        document.getElementById('descAttend').textContent = `${data.total||0}명 출석`;
+        document.getElementById('descAttend').textContent = `${attended}명 출석`;
         makeDonut('donutAttend', pct, '#10B981');
-        const rp = data.routineRate || 68;
+
+        const assigned  = routineData?.assigned || 0;
+        const completed = routineData?.completed || 0;
+        const rp = assigned > 0 ? Math.round(completed / assigned * 100) : 0;
         document.getElementById('pctRoutine').textContent = rp + '%';
         document.getElementById('descRoutine').textContent = `이행 ${rp}%`;
         makeDonut('donutRoutine', rp, '#F59E0B');
-    } catch(e) { makeDonut('donutAttend',70,'#10B981'); makeDonut('donutRoutine',68,'#F59E0B'); }
+    } catch(e) {
+        makeDonut('donutAttend', 0, '#10B981'); makeDonut('donutRoutine', 0, '#F59E0B');
+        document.getElementById('pctAttend').textContent = '-';
+        document.getElementById('pctRoutine').textContent = '-';
+    }
 }
 
 async function loadFeedbackStats() {
     try {
         const ym = fmt(new Date()).slice(0,7);
-        const res = await fetch(`/api/feedback/stats?monthYear=${ym}`);
+        const res = await fetch(`/api/feedback/tickets/summary?monthYear=${ym}`);
         if (!res.ok) throw new Error();
         const { data } = await res.json();
-        const pct = data.issued > 0 ? Math.round(data.used/data.issued*100) : 62;
+        const pct = data.issued > 0 ? Math.round(data.used/data.issued*100) : 0;
         document.getElementById('pctFeedback').textContent = pct + '%';
         document.getElementById('descFeedback').textContent = `${data.used||0} / ${data.issued||0}회`;
         makeDonut('donutFeedback', pct, '#EF4444');
-    } catch(e) { makeDonut('donutFeedback', 62, '#EF4444'); document.getElementById('pctFeedback').textContent='62%'; }
+    } catch(e) { makeDonut('donutFeedback', 0, '#EF4444'); document.getElementById('pctFeedback').textContent='-'; }
 }
 
 let revenueBarChart = null;
@@ -482,16 +499,28 @@ async function fetchSales() {
             document.getElementById('salesPagination').innerHTML = '';
             return;
         }
-        body.innerHTML = data.map(s => `<tr>
+        body.innerHTML = data.map(s => {
+            const refundAmount = s.refundAmount || 0;
+            const isRefunded = !!s.refundedAt;
+            const isPartial = isRefunded && refundAmount < s.amount;
+            const amountCell = isRefunded
+                ? `<span style="text-decoration:line-through;color:var(--text-muted)">${Number(s.amount||0).toLocaleString()}원</span>
+                   <div style="color:var(--error);font-size:11px">환불 ${refundAmount.toLocaleString()}원${isPartial ? ' (부분)' : ''}</div>`
+                : `${Number(s.amount||0).toLocaleString()}원`;
+            const actionCell = isRefunded
+                ? `<span class="badge badge-pending" style="font-size:11px">환불완료</span>`
+                : `<button class="btn btn-secondary refund-btn" style="padding:4px 9px;font-size:12px" onclick="refund(${s.id}, ${s.amount})">환불</button>`;
+            return `<tr>
             <td>${s.saleDate||'-'}</td>
             <td>${s.memberName||s.memberId||'-'}</td>
             <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.productName||'-'}</td>
             <td><span class="badge ${saleTypeBadge[s.productType]||'badge-pending'}">${saleTypeLabel[s.productType]||s.productType||'-'}</span></td>
-            <td class="sale-amount">${Number(s.amount||0).toLocaleString()}원</td>
+            <td class="sale-amount">${amountCell}</td>
             <td>${payLabel[s.paymentMethod]||s.paymentMethod||'-'}</td>
             <td style="font-size:12px;color:var(--text-secondary)">${s.memo||'-'}</td>
-            <td><button class="btn btn-secondary refund-btn" style="padding:4px 9px;font-size:12px" onclick="refund(${s.id})">환불</button></td>
-        </tr>`).join('');
+            <td>${actionCell}</td>
+        </tr>`;
+        }).join('');
         renderSalePagination(total);
     } catch(e) {
         body.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted)">데이터를 불러올 수 없습니다.</td></tr>`;
@@ -512,9 +541,20 @@ function renderSalePagination(total) {
 
 function goSalePage(p) { salePage = p; fetchSales(); }
 
-async function refund(id) {
-    if (!confirm('이 결제 내역을 환불 처리(삭제)하시겠습니까?')) return;
-    await fetch(`/api/revenue/sales/${id}`, { method:'DELETE' });
+async function refund(id, saleAmount) {
+    const input = prompt(`환불할 금액을 입력해주세요. (전액 환불: ${Number(saleAmount||0).toLocaleString()}원)`, saleAmount);
+    if (input === null) return;
+    const amount = parseInt(input.replace(/[^0-9]/g, ''), 10);
+    if (!amount || amount <= 0) { alert('환불 금액을 올바르게 입력해주세요.'); return; }
+    const reason = prompt('환불 사유를 입력해주세요. (선택)') || '';
+    if (!confirm(`${amount.toLocaleString()}원을 환불 처리하시겠습니까?`)) return;
+    const res  = await fetch(`/api/revenue/sales/${id}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, reason })
+    });
+    const json = await res.json();
+    if (!res.ok || (json && json.success === false)) { alert((json && json.message) || '환불 처리에 실패했습니다.'); return; }
     fetchSales();
     loadSummary();
 }
