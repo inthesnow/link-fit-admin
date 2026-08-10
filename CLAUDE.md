@@ -98,7 +98,11 @@ src/main/java/com/linkfit/admin/
 │       ├── CrmInboxApiController.java
 │       ├── CrmSalesApiController.java
 │       ├── CsTicketApiController.java
-│       └── AnnouncementApiController.java
+│       ├── AnnouncementApiController.java
+│       ├── LockerApiController.java        ← 라커 구역/배치/배정 (신규)
+│       ├── GymJoinRequestApiController.java ← 헬스장 가입 승인 (신규)
+│       ├── PaymentMethodApiController.java  ← 결제수단 관리 (신규)
+│       └── ProductPackageApiController.java ← 상품 패키지 구성 (신규)
 ├── domain/                           ← VO/DTO (getter/setter 방식)
 │   ├── AdminUser.java
 │   ├── Member.java / Staff.java / ClassSession.java / ClassAttendee.java
@@ -107,7 +111,12 @@ src/main/java/com/linkfit/admin/
 │   ├── PtMember.java / ReRegistration.java / GymSetting.java / TicketSettings.java
 │   ├── CrmUser.java / CrmAnnouncement.java / CrmCsTicket.java / CrmDailyStats.java
 │   ├── CrmMemberNote.java / CrmMemberTag.java / CrmMembershipHistory.java / CrmMessage.java / CrmSale.java
-│   └── FeedbackRequest.java / FeedbackTicket.java
+│   ├── FeedbackRequest.java / FeedbackTicket.java
+│   ├── TicketLog.java                ← 티켓 지급/차감 이력 (구독권/티켓 관리 "사용내역" 탭)
+│   ├── Locker.java / LockerZone.java ← 라커 구역(zone)·개별 라커
+│   ├── GymJoinRequest.java / GymJoinRequestLog.java ← 헬스장 가입 승인
+│   ├── PaymentMethod.java            ← 결제수단 관리
+│   └── ProductPackage.java           ← 상품 패키지(이용권/PT/락커/운동복 구성)
 ├── service/                          ← 서비스 인터페이스
 ├── service/mybatis/                  ← MyBatis 구현체 (현재 사용 중)
 │   ├── MyBatisMemberService.java
@@ -141,6 +150,8 @@ src/main/resources/
     ├── consults.html / revenue.html / products.html / messages.html
     ├── pt.html / settings.html / reregistration.html / feedback.html
     ├── inbox.html / cs.html / crm-sales.html / announcements.html
+    ├── lockers.html                  ← 라커 관리 (구역별 배치/배정)
+    ├── gym-requests.html             ← 헬스장 가입 승인
     └── error/404.html / error/500.html
 ```
 
@@ -180,7 +191,7 @@ ApiResponse.error("메시지") // { success: false, message: "...", data: null }
 <aside th:replace="~{fragments/sidebar :: sidebar('members')}"></aside>
 ```
 
-activePage 값: `dashboard` / `members` / `staff` / `classes` / `attendance` / `consults` / `revenue` / `products` / `messages` / `pt` / `reregistration` / `feedback` / `inbox` / `cs` / `crm-sales` / `announcements` / `settings`
+activePage 값: `dashboard` / `members` / `staff` / `classes` / `attendance` / `consults` / `revenue` / `products` / `messages` / `pt` / `reregistration` / `feedback` / `lockers` / `gym-requests` / `inbox` / `cs` / `crm-sales` / `announcements` / `settings`
 
 ### 프론트엔드 데이터 흐름
 페이지 렌더링은 Controller → Thymeleaf SSR.
@@ -211,6 +222,12 @@ JWT에 `role`(super_admin/gym_admin/trainer) 클레임이 있고 `ROLE_xxx` Gran
 `StaffApiController`/`RevenueApiController`/`SettingApiController` 등 기존 컨트롤러는 `gymId` 파라미터 자체가
 없어 전체 지점 데이터를 필터 없이 조회한다. 현재 지점이 `LF01` 1개뿐이라 실사용 영향은 없지만,
 2번째 지점이 생기면 지점 간 데이터가 섞인다.
+**2026-07-21에 `docs/multi-branch-expansion-issues.md`로 전수 재검증함 — 2번째 지점 추가 전 필독.**
+(테스트용으로 `docs/sql/gym_lf02_seed_20260726.sql`에 LF02 시드 데이터가 있음.)
+
+### 3-1. 트레이너 지정 방식이 두 갈래로 나뉘어 있음
+`user_profiles.trainer_id`(정상 동작)와 `crm_member_assignments`(중복 시스템, 죽은 코드에 가까움 + 실사용 시
+항상 실패)가 공존한다. 2026-07-26에 `docs/trainer-assignment-permissions-review.md`로 코드 기준 전수 검토함.
 
 ### 4. 로그인 쿠키에 `Secure`/`SameSite` 미설정 + CSRF 전역 비활성
 `AuthApiController`에서 쿠키에 `HttpOnly`만 설정하고 `Secure`/`SameSite`는 없음. `SecurityConfig`도
@@ -248,6 +265,28 @@ CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 �
 - 수업 관리 — 수업 수정, 신청자 목록, 트레이너 일정 캘린더, 원포인트 신청 처리 전면 개편
 - 사이드바 카테고리 개편 + 구독권/티켓 관리 페이지 신설
 - 회원 등급(tier)·OT/PT 유형·담당 트레이너 지정, 헬스장 설정(`/settings`) 등 기존 기능
+
+**신규 기능 (2026-07 ~ 08)**
+- **라커 관리(`/lockers`)** — 헬스장당 여러 구역(zone) 신설, 구역별 독립된 가로×세로 배치와 라커 번호
+  자동 생성(세로 최대 10칸), 회원 배정은 기존 상품/결제(membership) 흐름 재사용, 그리드는 가로/세로
+  각 20칸 타일 단위 페이지네이션
+- **헬스장 가입 승인(`/gym-requests`)** — 앱에서 회원이 가입 신청(`user_gym.status=PENDING`)하면 승인/거절,
+  대시보드 배너 + 사이드바 뱃지로 대기 건수 노출
+- **트레이너 계정 관리 개편** — 기존 앱 회원을 이름+전화번호로 검색해 트레이너로 승격/권한회수, 승격된
+  계정은 CRM 로그인 시 앱 비밀번호를 그대로 위임 검증. 관리자별 2차 비밀번호 + 사이드바 카테고리 잠금
+  (`LockableCategories` + `LockedCategoryInterceptor`로 직접 URL 접근도 서버측 차단)
+- **결제수단 관리** — 이용권 등록 시 신용카드/계좌이체/현금 기본 제공 + "기타결제수단추가"
+- **상품 등록 관리 개편** — 상품 패키지(`ProductPackage`)로 이용권/PT/락커/운동복을 자유 조합, PT는
+  기간 없이 횟수만 관리
+- **회원권 등록 개편** — 할인금액/납부액(미납금)/결제수단, 이력 기준 자동분류(신규/재유입/재등록/단품결제,
+  `membership.reg_type`), 이용권/락커/운동복 양도(`status='TRANSFERRED'`로 이력 보존)
+- **PT 세션 실제 충전** — PT 상품 등록 시 `user_profiles.pt_sessions_left`가 실제로 충전되도록 수정
+  (이전엔 등록해도 앱에서 못 쓰는 버그)
+- **매출 관리 — 환불 이력 보존** — 환불 시 행을 삭제하지 않고 `refund_amount`/`refunded_at`/`refund_reason`에
+  기록(전액/부분 환불), 통계는 `amount - refund_amount`로 집계
+- **구독권/티켓 관리 — 사용내역 탭** — `ticket_logs`(그동안 기록만 되고 조회 화면이 없었음) 조회 UI,
+  사진/영상 피드백권도 관리 대상에 포함
+- **연락처 정규화** — 저장은 항상 숫자만, 화면 표시할 때만 3-4-4 하이픈 부여
 
 **인프라**
 - `application-dev.yml` / `application-prod.yml` 환경 분리, prod는 환경변수 기반
@@ -328,7 +367,9 @@ gradlew.bat bootRun
 | `GET /messages` | 메시지 |
 | `GET /pt` | PT 관리 |
 | `GET /reregistration` | 재등록 관리 |
-| `GET /feedback` | 피드백 관리 |
+| `GET /feedback` | 구독권/티켓 관리 |
+| `GET /lockers` | 라커 관리 |
+| `GET /gym-requests` | 헬스장 가입 승인 |
 | `GET /inbox` | 받은 메시지함 (CRM) |
 | `GET /cs` | CS 티켓 |
 | `GET /crm-sales` | CRM 영업 현황 |
@@ -360,3 +401,9 @@ gradlew.bat bootRun
 | `/api/crm-sales/**` | CrmSalesApiController | CRM 매출 목록, 요약, 목표 관리, 내보내기 |
 | `/api/cs/tickets/**` | CsTicketApiController | CS 티켓 관리, 담당자·상태·응답 처리 |
 | `/api/announcements/**` | AnnouncementApiController | 공지사항 CRUD, 발송 처리 |
+| `/api/members/tickets/logs` | MemberApiController | 티켓(구독권/원포인트/피드백/사진/영상) 사용내역 조회 |
+| `/api/lockers/zones/**` | LockerApiController | 라커 구역 CRUD(가로/세로/총개수) |
+| `/api/lockers/**` | LockerApiController | 라커 목록 조회, 배정(assign) — 해제는 `/api/memberships/{id}` DELETE 재사용 |
+| `/api/gym-join-requests/**` | GymJoinRequestApiController | 헬스장 가입 신청 목록, 승인/거절 |
+| `/api/payment-methods/**` | PaymentMethodApiController | 결제수단 목록 조회·추가 |
+| `/api/product-packages/**` | ProductPackageApiController | 상품 패키지 CRUD |
