@@ -35,6 +35,7 @@ public class MyBatisConsultService implements ConsultService {
     @Override
     public Consult saveNew(Consult consult) {
         consult.setType("NEW");
+        consult.setPhone(stripNonDigits(consult.getPhone()));
         consultMapper.insert(consult);
         return consult;
     }
@@ -42,6 +43,7 @@ public class MyBatisConsultService implements ConsultService {
     @Override
     public Consult saveExisting(Consult consult) {
         consult.setType("EXISTING");
+        consult.setPhone(stripNonDigits(consult.getPhone()));
         consultMapper.insert(consult);
         return consult;
     }
@@ -49,8 +51,15 @@ public class MyBatisConsultService implements ConsultService {
     @Override
     public Consult update(Long id, Consult consult) {
         consult.setId(id);
+        consult.setPhone(stripNonDigits(consult.getPhone()));
         consultMapper.update(consult);
         return consult;
+    }
+
+    private static String stripNonDigits(String phone) {
+        if (phone == null) return null;
+        String digits = phone.replaceAll("[^0-9]", "");
+        return digits.isEmpty() ? null : digits;
     }
 
     @Override
