@@ -9,6 +9,7 @@
         <result property="type"         column="type"/>
         <result property="price"        column="price"/>
         <result property="durationDays" column="duration_days"/>
+        <result property="sessionCount" column="session_count"/>
         <result property="description"  column="description"/>
         <result property="active"       column="is_active"/>
     </resultMap>
@@ -38,14 +39,15 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO product (name, type, price, duration_days, description, is_active)
-        VALUES (#{name}, #{type}, #{price}, #{durationDays}, #{description}, #{active})
+        INSERT INTO product (name, type, price, duration_days, session_count, description, is_active)
+        VALUES (#{name}, #{type}, #{price}, #{durationDays}, #{sessionCount}, #{description}, #{active})
     </insert>
 
     <update id="update">
         UPDATE product
         SET name=#{name}, type=#{type}, price=#{price},
-            duration_days=#{durationDays}, description=#{description}, is_active=#{active}
+            duration_days=#{durationDays}, session_count=#{sessionCount},
+            description=#{description}, is_active=#{active}
         WHERE id=#{id}
     </update>
 

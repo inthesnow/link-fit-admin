@@ -6,6 +6,7 @@ public class Product {
     private String type;         // MEMBERSHIP, GROUP, PT, LOCKER, ITEM
     private int price;
     private int durationDays;
+    private Integer sessionCount; // 횟수 (PT 등 세션 기반 상품용, 없으면 null)
     private String description;
     private boolean active;
 
@@ -21,6 +22,8 @@ public class Product {
     public void setPrice(int price) { this.price = price; }
     public int getDurationDays() { return durationDays; }
     public void setDurationDays(int durationDays) { this.durationDays = durationDays; }
+    public Integer getSessionCount() { return sessionCount; }
+    public void setSessionCount(Integer sessionCount) { this.sessionCount = sessionCount; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
     public boolean isActive() { return active; }

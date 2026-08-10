@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.linkfit.admin.mapper.ProductPackageMapper">
+
+    <resultMap id="packageResultMap" type="ProductPackage">
+        <id     property="id"          column="id"/>
+        <result property="name"        column="name"/>
+        <result property="price"       column="price"/>
+        <result property="description" column="description"/>
+        <result property="active"      column="is_active"/>
+        <result property="createdAt"   column="created_at"/>
+        <result property="membershipEnabled"       column="membership_enabled"/>
+        <result property="membershipDurationMonths" column="membership_duration_months"/>
+        <result property="membershipDurationDays"  column="membership_duration_days"/>
+        <result property="ptEnabled"               column="pt_enabled"/>
+        <result property="ptSessionCount"          column="pt_session_count"/>
+        <result property="lockerEnabled"           column="locker_enabled"/>
+        <result property="lockerDurationMonths"    column="locker_duration_months"/>
+        <result property="lockerDurationDays"      column="locker_duration_days"/>
+        <result property="uniformEnabled"          column="uniform_enabled"/>
+        <result property="uniformDurationMonths"   column="uniform_duration_months"/>
+        <result property="uniformDurationDays"     column="uniform_duration_days"/>
+    </resultMap>
+
+    <select id="findAll" resultMap="packageResultMap">
+        SELECT * FROM product_package ORDER BY created_at DESC
+    </select>
+
+    <select id="findById" resultMap="packageResultMap">
+        SELECT * FROM product_package WHERE id = #{id}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO product_package
+            (name, price, description, is_active,
+             membership_enabled, membership_duration_months, membership_duration_days,
+             pt_enabled, pt_session_count,
+             locker_enabled, locker_duration_months, locker_duration_days,
+             uniform_enabled, uniform_duration_months, uniform_duration_days)
+        VALUES
+            (#{name}, #{price}, #{description}, #{active},
+             #{membershipEnabled}, #{membershipDurationMonths}, #{membershipDurationDays},
+             #{ptEnabled}, #{ptSessionCount},
+             #{lockerEnabled}, #{lockerDurationMonths}, #{lockerDurationDays},
+             #{uniformEnabled}, #{uniformDurationMonths}, #{uniformDurationDays})
+    </insert>
+
+    <update id="update">
+        UPDATE product_package
+        SET name=#{name}, price=#{price}, description=#{description}, is_active=#{active},
+            membership_enabled=#{membershipEnabled}, membership_duration_months=#{membershipDurationMonths}, membership_duration_days=#{membershipDurationDays},
+            pt_enabled=#{ptEnabled}, pt_session_count=#{ptSessionCount},
+            locker_enabled=#{lockerEnabled}, locker_duration_months=#{lockerDurationMonths}, locker_duration_days=#{lockerDurationDays},
+            uniform_enabled=#{uniformEnabled}, uniform_duration_months=#{uniformDurationMonths}, uniform_duration_days=#{uniformDurationDays}
+        WHERE id=#{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM product_package WHERE id=#{id}
+    </delete>
+
+</mapper>
