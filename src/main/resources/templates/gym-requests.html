@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>링크온핏 CRM — 헬스장 가입 승인</title>
+    <link rel="icon" type="image/svg+xml" th:href="@{/favicon.svg}">
+    <link rel="stylesheet" th:href="@{/css/common.css}">
+</head>
+<body>
+
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+<aside th:replace="~{fragments/sidebar :: sidebar('gym-requests')}"></aside>
+
+<main class="main">
+    <header class="main-header">
+        <div class="header-left">
+            <button class="mobile-menu-btn" onclick="openSidebar()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+            </button>
+            <h1 class="page-title">헬스장 가입 승인</h1>
+        </div>
+    </header>
+
+    <!-- 요약 카드 -->
+    <div style="display:flex;gap:12px;padding:16px 24px;flex-wrap:wrap" id="summaryCards">
+        <div class="summary-card" id="sc-pending"><div class="sc-val">-</div><div class="sc-label">승인 대기</div></div>
+        <div class="summary-card success" id="sc-approved"><div class="sc-val">-</div><div class="sc-label">승인됨</div></div>
+        <div class="summary-card error" id="sc-rejected"><div class="sc-val">-</div><div class="sc-label">거절됨</div></div>
+    </div>
+
+    <!-- 필터 -->
+    <div class="search-bar">
+        <select class="filter-select" id="statusFilter" onchange="currentPage=0;loadList()">
+            <option value="PENDING">승인 대기</option>
+            <option value="APPROVED">승인됨</option>
+            <option value="REJECTED">거절됨</option>
+            <option value="">전체</option>
+        </select>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>회원명</th>
+                    <th>전화번호</th>
+                    <th>요청 헬스장</th>
+                    <th>요청일시</th>
+                    <th>상태</th>
+                    <th>이력</th>
+                    <th>처리</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">로딩 중...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+</main>
+
+<!-- 거절 사유 입력 모달 -->
+<div class="modal-overlay" id="rejectModal">
+    <div class="modal" style="max-width:400px">
+        <div class="modal-header">
+            <span class="modal-title">가입 요청 거절</span>
+            <button class="modal-close" onclick="closeRejectModal()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label class="form-label">거절 사유 (선택)</label>
+                <textarea class="form-textarea" id="rejectMemo" rows="3" placeholder="거절 사유를 입력해주세요 (회원에게는 별도 안내되지 않으며 이력에만 남습니다)"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeRejectModal()">취소</button>
+            <button class="btn btn-danger" onclick="submitReject()">거절</button>
+        </div>
+    </div>
+</div>
+
+<!-- 이력 모달 -->
+<div class="modal-overlay" id="logModal">
+    <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+            <span class="modal-title">처리 이력</span>
+            <button class="modal-close" onclick="closeLogModal()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div id="logList" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeLogModal()">닫기</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.summary-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 22px; min-width: 90px; text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+}
+.summary-card.success .sc-val { color: var(--success); }
+.summary-card.error   .sc-val { color: var(--error); }
+.sc-val { font-size: 24px; font-weight: 700; color: var(--accent); }
+.sc-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.log-item { border-left: 3px solid var(--border); padding: 4px 10px; font-size: 13px; }
+.log-item.REQUESTED { border-left-color: var(--text-muted); }
+.log-item.APPROVED  { border-left-color: var(--success); }
+.log-item.REJECTED  { border-left-color: var(--error); }
+</style>
+
+<script>
+let currentPage = 0;
+const pageSize  = 20;
+let rejectingId = null;
+let currentItems = [];
+
+function csrfHeaders(extra) {
+    return Object.assign({ 'Content-Type': 'application/json' }, extra);
+}
+
+const statusLabel = { PENDING: '승인 대기', APPROVED: '승인됨', REJECTED: '거절됨' };
+const statusBadge = { PENDING: 'badge-pending', APPROVED: 'badge-active', REJECTED: 'badge-expired' };
+const actionLabel = { REQUESTED: '요청', APPROVED: '승인', REJECTED: '거절' };
+
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
+}
+function escHtml(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDatetime(s) {
+    if (!s) return '-';
+    return String(s).replace('T',' ').substring(0,16);
+}
+
+async function loadSummary() {
+    const [p, a, r] = await Promise.all([
+        fetch('/api/gym-join-requests?status=PENDING&page=0&size=1').then(r => r.json()),
+        fetch('/api/gym-join-requests?status=APPROVED&page=0&size=1').then(r => r.json()),
+        fetch('/api/gym-join-requests?status=REJECTED&page=0&size=1').then(r => r.json())
+    ]);
+    document.getElementById('sc-pending').querySelector('.sc-val').textContent  = p.data?.total ?? 0;
+    document.getElementById('sc-approved').querySelector('.sc-val').textContent = a.data?.total ?? 0;
+    document.getElementById('sc-rejected').querySelector('.sc-val').textContent = r.data?.total ?? 0;
+}
+
+async function loadList() {
+    const status = document.getElementById('statusFilter').value;
+    const res  = await fetch(`/api/gym-join-requests?status=${status}&page=${currentPage}&size=${pageSize}`);
+    const json = await res.json();
+    if (!json.success) return;
+    currentItems = json.data.items || [];
+    renderTable(currentItems, json.data.total);
+}
+
+function renderTable(items, total) {
+    const tbody = document.getElementById('tableBody');
+    if (!items || !items.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">요청이 없습니다.</td></tr>`;
+        renderPagination(0);
+        return;
+    }
+    tbody.innerHTML = items.map(r => `
+        <tr>
+            <td>${escHtml(r.memberName || r.memberId)}</td>
+            <td>${formatPhone(r.memberPhone) || '-'}</td>
+            <td>${escHtml(r.gymName)}</td>
+            <td>${fmtDatetime(r.requestedAt)}</td>
+            <td><span class="badge ${statusBadge[r.status] || 'badge-pending'}">${statusLabel[r.status] || r.status}</span></td>
+            <td><button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openLogModal(${r.id})">이력보기</button></td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap">
+                ${r.status === 'PENDING' ? `
+                    <button class="btn btn-primary" style="padding:5px 10px;font-size:12px" onclick="approve(${r.id})">승인</button>
+                    <button class="btn btn-danger"  style="padding:5px 10px;font-size:12px" onclick="openRejectModal(${r.id})">거절</button>
+                ` : '<span style="color:var(--text-muted);font-size:12px">-</span>'}
+            </td>
+        </tr>`).join('');
+    renderPagination(total);
+}
+
+function renderPagination(total) {
+    const totalPages = Math.ceil(total / pageSize);
+    const pg = document.getElementById('pagination');
+    if (totalPages <= 1) { pg.innerHTML = ''; return; }
+    pg.innerHTML = Array.from({length: totalPages}, (_,i) =>
+        `<button class="page-btn${i === currentPage ? ' active' : ''}" onclick="currentPage=${i};loadList()">${i+1}</button>`
+    ).join('');
+}
+
+async function approve(id) {
+    if (!confirm('이 회원의 헬스장 가입을 승인하시겠습니까?')) return;
+    const res  = await fetch(`/api/gym-join-requests/${id}/approve`, { method: 'POST', headers: csrfHeaders() });
+    const json = await res.json();
+    if (!json.success) { alert(json.message || '승인에 실패했습니다.'); return; }
+    loadList();
+    loadSummary();
+}
+
+function openRejectModal(id) {
+    rejectingId = id;
+    document.getElementById('rejectMemo').value = '';
+    document.getElementById('rejectModal').classList.add('open');
+}
+function closeRejectModal() {
+    document.getElementById('rejectModal').classList.remove('open');
+    rejectingId = null;
+}
+async function submitReject() {
+    const memo = document.getElementById('rejectMemo').value;
+    const res  = await fetch(`/api/gym-join-requests/${rejectingId}/reject`, {
+        method: 'POST', headers: csrfHeaders(), body: JSON.stringify({ memo })
+    });
+    const json = await res.json();
+    if (!json.success) { alert(json.message || '거절 처리에 실패했습니다.'); return; }
+    closeRejectModal();
+    loadList();
+    loadSummary();
+}
+
+async function openLogModal(id) {
+    const res  = await fetch(`/api/gym-join-requests/${id}/logs`);
+    const json = await res.json();
+    const list = document.getElementById('logList');
+    if (!json.success || !json.data || !json.data.length) {
+        list.innerHTML = `<div style="color:var(--text-muted);font-size:13px">이력이 없습니다.</div>`;
+    } else {
+        list.innerHTML = json.data.map(l => `
+            <div class="log-item ${l.action}">
+                <div style="font-weight:600">${actionLabel[l.action] || l.action}${l.actorName ? ` · ${escHtml(l.actorName)}` : ''}</div>
+                <div style="color:var(--text-muted);font-size:12px">${fmtDatetime(l.createdAt)}</div>
+                ${l.memo ? `<div style="margin-top:4px">${escHtml(l.memo)}</div>` : ''}
+            </div>`).join('');
+    }
+    document.getElementById('logModal').classList.add('open');
+}
+function closeLogModal() { document.getElementById('logModal').classList.remove('open'); }
+
+function openSidebar() {
+    document.querySelector('.sidebar').classList.add('open');
+    document.getElementById('sidebarOverlay').classList.add('open');
+}
+function closeSidebar() {
+    document.querySelector('.sidebar').classList.remove('open');
+    document.getElementById('sidebarOverlay').classList.remove('open');
+}
+
+loadSummary();
+loadList();
+</script>
+</body>
+</html>

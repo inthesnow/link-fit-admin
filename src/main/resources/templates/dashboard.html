@@ -48,6 +48,15 @@
         </div>
     </header>
 
+    <!-- 헬스장 가입 승인 대기 알림 -->
+    <div id="gymRequestAlert" style="display:none;margin:16px 24px 0;padding:14px 18px;border-radius:12px;background:#FFF8E6;border:1px solid #F2D98A;align-items:center;justify-content:space-between;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+            <svg viewBox="0 0 24 24" fill="#9A6700" width="20" height="20"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            <span style="font-size:13px;color:#594100"><b id="gymRequestAlertCount">0</b>건의 헬스장 가입 승인 요청이 대기 중입니다.</span>
+        </div>
+        <a href="/gym-requests" style="font-size:12px;color:var(--accent);font-weight:600;text-decoration:none;white-space:nowrap">지금 처리하기 →</a>
+    </div>
+
     <!-- ① 전체회원수 / 다운로드 받은 회원 / 실 어플사용 회원 -->
     <div class="kpi-row-3">
         <div class="kpi-card">
@@ -329,20 +338,29 @@ async function loadRevenue() {
     try {
         const today = new Date();
         const dateStr = formatDate(today);
-        const res = await fetch(`/api/revenue/summary?date=${dateStr}&period=monthly`);
+        const res = await fetch(`/api/revenue?date=${dateStr}&period=monthly`);
         if (!res.ok) return;
         const { data } = await res.json();
         if (!data) return;
 
-        const total = data.totalRevenue || data.total || 0;
+        const total = data.total || 0;
         document.getElementById('revAmount').textContent = total.toLocaleString() + '원';
 
-        const compare = data.compareRate;
-        if (compare != null) {
-            const el = document.getElementById('revCompare');
-            const isPos = compare >= 0;
-            el.className = 'rev-compare ' + (isPos ? 'positive' : 'negative');
-            el.innerHTML = `${isPos ? '▲' : '▼'} ${Math.abs(compare)}% 전월 대비`;
+        // 전월 대비: 지난달 같은 집계를 한 번 더 불러 직접 비교한다 (백엔드에 compareRate 필드가 없음).
+        const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const prevRes = await fetch(`/api/revenue?date=${formatDate(prevMonth)}&period=monthly`);
+        const el = document.getElementById('revCompare');
+        if (prevRes.ok) {
+            const { data: prevData } = await prevRes.json();
+            const prevTotal = prevData?.total || 0;
+            if (prevTotal > 0) {
+                const compare = Math.round((total - prevTotal) / prevTotal * 100);
+                const isPos = compare >= 0;
+                el.className = 'rev-compare ' + (isPos ? 'positive' : 'negative');
+                el.innerHTML = `${isPos ? '▲' : '▼'} ${Math.abs(compare)}% 전월 대비`;
+            } else {
+                el.textContent = '전월 매출 데이터 없음';
+            }
         }
 
         // sparkline from daily trend
@@ -461,6 +479,22 @@ async function loadTrend() {
     } catch(e) {}
 }
 
+// ── 헬스장 가입 승인 대기 ──────────────────────────────────
+async function loadGymRequestAlert() {
+    try {
+        const res = await fetch('/api/gym-join-requests?status=PENDING&page=0&size=1');
+        const { data } = await res.json();
+        const count = data?.total ?? 0;
+        const box = document.getElementById('gymRequestAlert');
+        if (count > 0) {
+            document.getElementById('gymRequestAlertCount').textContent = count;
+            box.style.display = 'flex';
+        } else {
+            box.style.display = 'none';
+        }
+    } catch(e) {}
+}
+
 // ── 전체 로드 ────────────────────────────────────────────
 function loadAll() {
     loadMemberKPI();
@@ -472,6 +506,7 @@ function loadAll() {
     loadTicketUsage();
     loadRevenue();
     loadTrend();
+    loadGymRequestAlert();
 }
 
 function openSidebar() {

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.linkfit.admin.mapper.GymJoinRequestMapper">
+
+    <resultMap id="requestMap" type="com.linkfit.admin.domain.GymJoinRequest">
+        <id     property="id"           column="id"/>
+        <result property="memberId"     column="member_id"/>
+        <result property="memberName"   column="member_name"/>
+        <result property="memberPhone"  column="member_phone"/>
+        <result property="gymId"        column="gym_id"/>
+        <result property="gymName"      column="gym_name"/>
+        <result property="status"       column="status"/>
+        <result property="requestedAt"  column="requested_at"/>
+    </resultMap>
+
+    <sql id="baseJoin">
+        SELECT ug.id, ug.user_id AS member_id, ug.gym_id, ug.status,
+               ug.joined_at AS requested_at,
+               up.name    AS member_name,
+               up.contact AS member_phone,
+               g.name     AS gym_name
+          FROM user_gym ug
+          JOIN gym g ON g.id = ug.gym_id
+          LEFT JOIN user_profiles up ON up.user_id = ug.user_id
+    </sql>
+
+    <select id="findAll" resultMap="requestMap">
+        <include refid="baseJoin"/>
+         WHERE ug.gym_id = #{gymId}
+        <if test="status != null and status != ''">
+           AND ug.status = #{status}
+        </if>
+         ORDER BY ug.joined_at DESC
+         LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM user_gym ug
+         WHERE ug.gym_id = #{gymId}
+        <if test="status != null and status != ''">
+           AND ug.status = #{status}
+        </if>
+    </select>
+
+    <select id="findById" resultMap="requestMap">
+        <include refid="baseJoin"/>
+         WHERE ug.id = #{id} LIMIT 1
+    </select>
+
+    <update id="approve">
+        UPDATE user_gym SET status = 'APPROVED', is_active = 1 WHERE id = #{id} AND status = 'PENDING'
+    </update>
+
+    <update id="reject">
+        UPDATE user_gym SET status = 'REJECTED', is_active = 0 WHERE id = #{id} AND status = 'PENDING'
+    </update>
+
+    <insert id="insertLog">
+        INSERT INTO user_gym_request_log (user_id, gym_id, action, memo, actor_id)
+        VALUES (#{userId}, #{gymId}, #{action}, #{memo}, #{actorId})
+    </insert>
+
+    <resultMap id="logMap" type="com.linkfit.admin.domain.GymJoinRequestLog">
+        <id     property="id"        column="id"/>
+        <result property="action"    column="action"/>
+        <result property="memo"      column="memo"/>
+        <result property="actorName" column="actor_name"/>
+        <result property="createdAt" column="created_at"/>
+    </resultMap>
+
+    <select id="findLogs" resultMap="logMap">
+        SELECT l.id, l.action, l.memo, l.created_at,
+               cu.name AS actor_name
+          FROM user_gym_request_log l
+          LEFT JOIN crm_users cu ON cu.id = l.actor_id
+         WHERE l.user_id = #{userId} AND l.gym_id = #{gymId}
+         ORDER BY l.created_at DESC
+    </select>
+
+</mapper>

@@ -30,6 +30,9 @@ public class PageController {
     @GetMapping("/reregistration")
     public String reregistration() { return "reregistration"; }
 
+    @GetMapping("/gym-requests")
+    public String gymRequests() { return "gym-requests"; }
+
     @GetMapping("/revenue")
     public String revenue() { return "revenue"; }
 
