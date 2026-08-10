@@ -49,7 +49,7 @@
                     <th>등급</th>
                     <th>담당 트레이너</th>
                     <th>PT 잔여 횟수</th>
-                    <th>관리</th>
+                    <th style="width:220px">관리</th>
                 </tr>
             </thead>
             <tbody id="ptTableBody">
@@ -72,11 +72,17 @@
         <div class="modal-body">
             <div style="margin-bottom:16px;font-size:13px;color:var(--text-secondary)" id="ticketCurrentInfo"></div>
             <div class="form-group">
+                <label class="form-label">대상</label>
+                <select class="form-select" id="ticketTarget">
+                    <option value="PURCHASED">구매 PT</option>
+                    <option value="SERVICE">서비스 PT (CRM 특별지급)</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label class="form-label">조정 유형</label>
                 <select class="form-select" id="ticketAction">
                     <option value="add">충전 (+)</option>
                     <option value="use">차감 (-)</option>
-                    <option value="adjust">직접 설정</option>
                 </select>
             </div>
             <div class="form-group">
@@ -120,6 +126,14 @@ function csrfHeaders(extra) {
     return Object.assign({ 'Content-Type': 'application/json' }, extra);
 }
 
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
+}
+
 const tierLabel = { BASIC:'기본', LIGHT_FIT:'라이트', REGULAR_FIT:'레귤러', INTENSIVE_FIT:'인텐시브' };
 
 async function loadStats() {
@@ -146,18 +160,27 @@ function renderTable(items, total) {
         return;
     }
     tbody.innerHTML = items.map(m => {
-        const rem = m.ptRemaining || 0;
+        const purchased = m.purchasedPt || 0;
+        const service   = m.servicePt || 0;
+        const rem = purchased + service;
         const cls = rem === 0 ? 'remaining-zero' : rem < 5 ? 'remaining-low' : 'remaining-ok';
         return `<tr>
             <td>${m.memberName || m.memberId}</td>
-            <td>${m.memberPhone || '-'}</td>
+            <td>${formatPhone(m.memberPhone) || '-'}</td>
             <td><span class="badge badge-pending" style="font-size:11px">${tierLabel[m.tier] || m.tier || '-'}</span></td>
             <td>${m.trainerName || '<span style="color:var(--text-muted)">미배정</span>'}</td>
-            <td><span class="remaining-badge ${cls}">${rem}회</span></td>
             <td>
+                <span class="remaining-badge ${cls}">${rem}회</span>
+                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">구매 ${purchased} · 서비스 ${service}</div>
+            </td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px"
-                        onclick="openTicketModal('${m.memberId}','${escHtml(m.memberName||m.memberId)}',${rem})">
-                    횟수 조정
+                        onclick="openTicketModal('${m.memberId}','${escHtml(m.memberName||m.memberId)}',${purchased},${service},'PURCHASED')">
+                    구매 PT 조정
+                </button>
+                <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;color:var(--accent)"
+                        onclick="openTicketModal('${m.memberId}','${escHtml(m.memberName||m.memberId)}',${purchased},${service},'SERVICE')">
+                    서비스 PT 지급
                 </button>
             </td>
         </tr>`;
@@ -174,10 +197,11 @@ function renderPagination(total) {
     ).join('');
 }
 
-function openTicketModal(memberId, name, remaining) {
+function openTicketModal(memberId, name, purchasedPt, servicePt, target) {
     editingMemberId = memberId;
     document.getElementById('ticketModalTitle').textContent = `${name} — PT 횟수 조정`;
-    document.getElementById('ticketCurrentInfo').textContent = `현재 잔여 횟수: ${remaining}회`;
+    document.getElementById('ticketCurrentInfo').textContent = `현재 구매 PT ${purchasedPt}회 · 서비스 PT ${servicePt}회`;
+    document.getElementById('ticketTarget').value = target || 'PURCHASED';
     document.getElementById('ticketAction').value = 'add';
     document.getElementById('ticketAmount').value = '1';
     document.getElementById('ticketDesc').value   = '';
@@ -190,19 +214,20 @@ function closeTicketModal() {
 }
 
 async function saveTicket() {
+    const target = document.getElementById('ticketTarget').value;
     const action = document.getElementById('ticketAction').value;
     const amount = parseInt(document.getElementById('ticketAmount').value, 10);
     const desc   = document.getElementById('ticketDesc').value;
     if (isNaN(amount) || amount <= 0) { alert('횟수를 올바르게 입력해주세요.'); return; }
 
-    const adjustAmount = action === 'use' ? -amount : amount;
-    const res = await fetch(`/api/pt/members/${editingMemberId}/tickets`, {
+    const delta = action === 'use' ? -amount : amount;
+    const res  = await fetch(`/api/pt/members/${editingMemberId}/sessions`, {
         method: 'PUT',
         headers: csrfHeaders(),
-        body: JSON.stringify({ ticketType: 'ONE_POINT', amount: adjustAmount,
-                               actionType: action, description: desc })
+        body: JSON.stringify({ target, delta, description: desc })
     });
-    if (!res.ok) { alert('저장에 실패했습니다.'); return; }
+    const json = await res.json();
+    if (!res.ok || (json && json.success === false)) { alert((json && json.message) || '저장에 실패했습니다.'); return; }
     closeTicketModal();
     loadStats();
     loadList();

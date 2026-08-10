@@ -20,6 +20,11 @@ public class Member {
     private String trainerId;
     private String trainerName;
     private Integer ptSessionsLeft;
+    private Integer servicePtSessionsLeft;
+    private Boolean appInstalled;
+    private String currentProductName;
+    private Integer currentProductPrice;
+    private Integer unpaidAmount;
 
     public Member() {}
 
@@ -57,4 +62,14 @@ public class Member {
     public void setMembershipStart(LocalDate membershipStart) { this.membershipStart = membershipStart; }
     public Integer getPtSessionsLeft() { return ptSessionsLeft; }
     public void setPtSessionsLeft(Integer ptSessionsLeft) { this.ptSessionsLeft = ptSessionsLeft; }
+    public Integer getServicePtSessionsLeft() { return servicePtSessionsLeft; }
+    public void setServicePtSessionsLeft(Integer servicePtSessionsLeft) { this.servicePtSessionsLeft = servicePtSessionsLeft; }
+    public Boolean getAppInstalled() { return appInstalled; }
+    public void setAppInstalled(Boolean appInstalled) { this.appInstalled = appInstalled; }
+    public String getCurrentProductName() { return currentProductName; }
+    public void setCurrentProductName(String currentProductName) { this.currentProductName = currentProductName; }
+    public Integer getCurrentProductPrice() { return currentProductPrice; }
+    public void setCurrentProductPrice(Integer currentProductPrice) { this.currentProductPrice = currentProductPrice; }
+    public Integer getUnpaidAmount() { return unpaidAmount; }
+    public void setUnpaidAmount(Integer unpaidAmount) { this.unpaidAmount = unpaidAmount; }
 }

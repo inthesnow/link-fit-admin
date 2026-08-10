@@ -92,7 +92,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">전화번호</label>
-                    <input type="text" class="form-input" id="cPhone" placeholder="010-0000-0000">
+                    <input type="text" class="form-input" id="cPhone" placeholder="010-0000-0000" oninput="this.value=formatPhoneAsTyped(this.value)">
                 </div>
                 <div class="form-group">
                     <label class="form-label">성별</label>
@@ -133,6 +133,21 @@ function csrfHeaders(extra) {
     return Object.assign({ 'Content-Type': 'application/json' }, extra);
 }
 
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
+}
+// 입력 중 실시간으로 3-4-4 자리로 하이픈을 넣어준다.
+function formatPhoneAsTyped(v) {
+    const d = String(v || '').replace(/[^0-9]/g, '').slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 7) return d.replace(/(\d{3})(\d+)/, '$1-$2');
+    return d.replace(/(\d{3})(\d{4})(\d+)/, '$1-$2-$3');
+}
+
 const typeLabel = { NEW: '신규', EXISTING: '기존 회원' };
 const typeBadge = { NEW: 'badge-active', EXISTING: 'badge-admin' };
 const resultLabel = { REGISTERED: '등록 완료', PENDING: '미결정', NO_SHOW: '노쇼' };
@@ -156,7 +171,7 @@ function renderTable(consults, total) {
         <tr>
             <td><span class="badge ${typeBadge[c.type]}">${typeLabel[c.type]}</span></td>
             <td>${c.name}</td>
-            <td>${c.phone || '-'}</td>
+            <td>${formatPhone(c.phone) || '-'}</td>
             <td>${genderLabel[c.gender] || '-'}</td>
             <td>${c.interest || '-'}</td>
             <td><span class="badge ${resultBadge[c.result]}">${resultLabel[c.result]}</span></td>

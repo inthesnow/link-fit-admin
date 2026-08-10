@@ -21,6 +21,11 @@
         <result property="trainerId"     column="trainer_id"/>
         <result property="trainerName"   column="trainer_name"/>
         <result property="ptSessionsLeft" column="pt_sessions_left"/>
+        <result property="servicePtSessionsLeft" column="service_pt_sessions_left"/>
+        <result property="appInstalled"  column="app_installed"/>
+        <result property="currentProductName"  column="current_product_name"/>
+        <result property="currentProductPrice" column="current_product_price"/>
+        <result property="unpaidAmount"        column="unpaid_amount"/>
     </resultMap>
 
     <!-- 상태: 탈퇴 > 휴면(freeze) > 정지 > 유효 순으로 판정 -->
@@ -35,12 +40,25 @@
     <sql id="memberSelect">
         SELECT u.user_id AS id, u.email, u.role,
                up.name, up.contact AS phone, up.gender, up.birth_date, up.member_type,
-               up.tier, up.trainer_id, tp.name AS trainer_name, up.pt_sessions_left,
+               up.tier, up.trainer_id, tp.name AS trainer_name, up.pt_sessions_left, up.service_pt_sessions_left,
                <include refid="statusCase"/> AS status,
                DATE(u.created_at) AS join_date,
-               (SELECT start_date FROM membership ms WHERE ms.user_id = u.user_id ORDER BY ms.end_date DESC LIMIT 1) AS membership_start,
-               (SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id ORDER BY ms.end_date DESC LIMIT 1) AS membership_end,
-               NULL AS memo
+               (SELECT start_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS membership_start,
+               (SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS membership_end,
+               (SELECT COALESCE(p.name, pkg.name) FROM membership ms
+                 LEFT JOIN product p ON p.id = ms.product_id
+                 LEFT JOIN product_package pkg ON pkg.id = ms.package_id
+                 WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS current_product_name,
+               (SELECT ms.price - ms.discount_amount FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS current_product_price,
+               (SELECT (ms.price - ms.discount_amount) - ms.paid_amount FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS unpaid_amount,
+               NULL AS memo,
+               EXISTS (
+                   SELECT 1 FROM user_auth ua2
+                   JOIN user_profiles up2 ON up2.user_id = ua2.user_id
+                   WHERE up2.name = up.name
+                     AND up.contact IS NOT NULL AND up.contact != ''
+                     AND REPLACE(REPLACE(up2.contact, '-', ''), ' ', '') = REPLACE(REPLACE(up.contact, '-', ''), ' ', '')
+               ) AS app_installed
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         LEFT JOIN user_profiles tp ON tp.user_id = up.trainer_id
@@ -57,10 +75,10 @@
             <foreach collection="trainerIds" item="tid" open="(" separator="," close=")">#{tid}</foreach>
         </if>
         <if test="minDaysLeft != null">
-            AND DATEDIFF((SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id ORDER BY ms.end_date DESC LIMIT 1), CURDATE()) &gt;= #{minDaysLeft}
+            AND DATEDIFF((SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1), CURDATE()) &gt;= #{minDaysLeft}
         </if>
         <if test="maxDaysLeft != null">
-            AND DATEDIFF((SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id ORDER BY ms.end_date DESC LIMIT 1), CURDATE()) &lt;= #{maxDaysLeft}
+            AND DATEDIFF((SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1), CURDATE()) &lt;= #{maxDaysLeft}
         </if>
         <if test="minPtRemaining != null">
             AND up.pt_sessions_left &gt;= #{minPtRemaining}
@@ -115,6 +133,13 @@
     <select id="existsInGym" resultType="boolean">
         SELECT COUNT(*) > 0 FROM user_gym
          WHERE user_id = #{id} AND gym_id = #{gymId} AND is_active = 1
+    </select>
+
+    <select id="existsByNameAndPhone" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM user_profiles up
+          JOIN users u ON u.user_id = up.user_id
+         WHERE up.name = #{name} AND up.contact = #{phone}
+           AND u.deleted_at IS NULL
     </select>
 
     <insert id="insertUser">
@@ -213,33 +238,72 @@
         <result property="memberId"    column="user_id"/>
         <result property="productId"   column="product_id"/>
         <result property="productName" column="product_name"/>
+        <result property="packageId"   column="package_id"/>
+        <result property="packageName" column="package_name"/>
+        <result property="lockerId"    column="locker_id"/>
         <result property="type"        column="type"/>
         <result property="startDate"   column="start_date"/>
         <result property="endDate"     column="end_date"/>
         <result property="price"       column="price"/>
+        <result property="discountAmount" column="discount_amount"/>
+        <result property="paidAmount"  column="paid_amount"/>
+        <result property="paymentMethod" column="payment_method"/>
+        <result property="regType"     column="reg_type"/>
+        <result property="sessionCount" column="session_count"/>
+        <result property="status"      column="status"/>
         <result property="memo"        column="memo"/>
         <result property="createdAt"   column="created_at"/>
     </resultMap>
 
     <select id="findMembershipsByMemberId" resultMap="membershipResultMap">
-        SELECT ms.*, p.name AS product_name
+        SELECT ms.*, p.name AS product_name, pkg.name AS package_name
         FROM membership ms
         LEFT JOIN product p ON ms.product_id = p.id
+        LEFT JOIN product_package pkg ON ms.package_id = pkg.id
         WHERE ms.user_id=#{memberId}
         ORDER BY ms.start_date DESC
     </select>
 
+    <select id="findMembershipById" resultMap="membershipResultMap">
+        SELECT ms.*, p.name AS product_name, pkg.name AS package_name
+        FROM membership ms
+        LEFT JOIN product p ON ms.product_id = p.id
+        LEFT JOIN product_package pkg ON ms.package_id = pkg.id
+        WHERE ms.id=#{id}
+    </select>
+
     <insert id="insertMembership" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO membership (user_id, product_id, type, start_date, end_date, price, memo)
-        VALUES (#{memberId}, #{productId}, #{type}, #{startDate}, #{endDate}, #{price}, #{memo})
+        INSERT INTO membership (user_id, product_id, package_id, locker_id, type, start_date, end_date, price, discount_amount, paid_amount, payment_method, reg_type, session_count, status, memo)
+        VALUES (#{memberId}, #{productId}, #{packageId}, #{lockerId}, #{type}, #{startDate}, #{endDate}, #{price}, #{discountAmount}, #{paidAmount}, #{paymentMethod}, #{regType}, #{sessionCount}, #{status}, #{memo})
     </insert>
+
+    <!-- 신규/재유입/재등록 분류를 위한 이 회원의 과거 이용권/PT 이력 요약.
+         cnt=0이면 신규, 아니면 lastEndDate와 이번 시작일을 비교해 재유입/재등록을 가른다. -->
+    <select id="findMembershipHistorySummary" resultType="map">
+        SELECT COUNT(*) AS cnt, MAX(end_date) AS lastEndDate
+        FROM membership
+        WHERE user_id = #{memberId} AND type IN ('MEMBERSHIP', 'PT')
+    </select>
 
     <update id="updateMembershipEndDate">
         UPDATE membership SET end_date=#{endDate} WHERE id=#{id}
     </update>
 
+    <update id="updateMembershipAmounts">
+        UPDATE membership SET price=#{price}, discount_amount=#{discountAmount}, paid_amount=#{paidAmount}, payment_method=#{paymentMethod}, reg_type=#{regType} WHERE id=#{id}
+    </update>
+
+    <!-- 양도: 원 회원의 행은 삭제하지 않고 상태만 TRANSFERRED로 변경해 이력을 보존한다 -->
+    <update id="markMembershipTransferred">
+        UPDATE membership SET status='TRANSFERRED' WHERE id=#{id}
+    </update>
+
     <delete id="deleteMembership">
         DELETE FROM membership WHERE id=#{id}
+    </delete>
+
+    <delete id="deleteMembershipsByMemberAndPackage">
+        DELETE FROM membership WHERE user_id=#{memberId} AND package_id=#{packageId}
     </delete>
 
 
@@ -263,7 +327,8 @@
           FROM membership ms
           LEFT JOIN product p ON ms.product_id = p.id
           LEFT JOIN user_profiles up ON ms.user_id = up.user_id
-         WHERE ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
+         WHERE ms.status IS NULL
+           AND ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
          ORDER BY ms.end_date ASC
          LIMIT #{size} OFFSET #{offset}
     </select>
@@ -271,15 +336,35 @@
     <select id="countExpiringMemberships" resultType="long">
         SELECT COUNT(*)
           FROM membership ms
-         WHERE ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
+         WHERE ms.status IS NULL
+           AND ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
     </select>
 
     <select id="findTickets" resultType="MemberTicket">
         SELECT ticket_type AS ticketType, remaining
         FROM member_tickets
         WHERE user_id = #{userId}
-          AND ticket_type IN ('ONE_POINT', 'FEEDBACK')
-        ORDER BY FIELD(ticket_type, 'ONE_POINT', 'FEEDBACK')
+          AND ticket_type IN ('ONE_POINT', 'FEEDBACK', 'PHOTO', 'VIDEO')
+        ORDER BY FIELD(ticket_type, 'ONE_POINT', 'FEEDBACK', 'PHOTO', 'VIDEO')
+    </select>
+
+    <!-- ACTIVE 상태(탈퇴X, 유증 아님, is_active=1)인 회원들의 ONE_POINT/FEEDBACK/PHOTO/VIDEO 잔량 합계.
+         members.html의 ACTIVE 판정(statusCase)과 동일한 조건을 그대로 적용한다. -->
+    <select id="ticketTotals" resultType="map">
+        SELECT
+            COALESCE(SUM(CASE WHEN mt.ticket_type='ONE_POINT' THEN mt.remaining ELSE 0 END), 0) AS onePoint,
+            COALESCE(SUM(CASE WHEN mt.ticket_type='FEEDBACK'  THEN mt.remaining ELSE 0 END), 0) AS feedback,
+            COALESCE(SUM(CASE WHEN mt.ticket_type='PHOTO'     THEN mt.remaining ELSE 0 END), 0) AS photo,
+            COALESCE(SUM(CASE WHEN mt.ticket_type='VIDEO'     THEN mt.remaining ELSE 0 END), 0) AS video
+        FROM member_tickets mt
+        JOIN users u ON u.user_id = mt.user_id AND u.role = 'MEMBER'
+                    AND u.is_active = 1 AND u.deleted_at IS NULL
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        WHERE mt.ticket_type IN ('ONE_POINT', 'FEEDBACK', 'PHOTO', 'VIDEO')
+          AND NOT EXISTS (
+              SELECT 1 FROM member_freeze mf
+               WHERE mf.user_id = u.user_id AND CURDATE() BETWEEN mf.freeze_start AND mf.freeze_end
+          )
     </select>
 
     <insert id="upsertTicket">
@@ -293,6 +378,35 @@
         VALUES (#{userId}, #{ticketType}, #{actionType}, #{description})
     </insert>
 
+    <sql id="ticketLogWhere">
+        JOIN users u ON u.user_id = tl.user_id AND u.role = 'MEMBER'
+        LEFT JOIN user_profiles up ON up.user_id = tl.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId}
+        WHERE 1=1
+        <if test="ticketType != null and ticketType != ''">
+            AND tl.ticket_type = #{ticketType}
+        </if>
+        <if test="keyword != null and keyword != ''">
+            AND (up.name LIKE CONCAT('%', #{keyword}, '%') OR tl.user_id LIKE CONCAT('%', #{keyword}, '%'))
+        </if>
+    </sql>
+
+    <select id="findTicketLogs" resultType="TicketLog">
+        SELECT tl.user_id AS userId, COALESCE(up.name, tl.user_id) AS userName,
+               tl.ticket_type AS ticketType, tl.action_type AS actionType,
+               tl.description, DATE_FORMAT(tl.created_at, '%Y-%m-%d %H:%i') AS createdAt
+        FROM ticket_logs tl
+        <include refid="ticketLogWhere"/>
+        ORDER BY tl.created_at DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countTicketLogs" resultType="long">
+        SELECT COUNT(*)
+        FROM ticket_logs tl
+        <include refid="ticketLogWhere"/>
+    </select>
+
     <select id="findAllActiveIds" resultType="string">
         SELECT user_id FROM users WHERE role = 'MEMBER' AND is_active = 1
     </select>
@@ -302,32 +416,47 @@
         <result property="memberName"  column="member_name"/>
         <result property="memberPhone" column="member_phone"/>
         <result property="tier"        column="tier"/>
-        <result property="ptRemaining" column="pt_remaining"/>
+        <result property="purchasedPt" column="purchased_pt"/>
+        <result property="servicePt"   column="service_pt"/>
         <result property="trainerName" column="trainer_name"/>
     </resultMap>
 
+    <!-- 실제 PT 세션(user_profiles.pt_sessions_left/service_pt_sessions_left) 기준.
+         담당 트레이너는 user_profiles.trainer_id(앱이 실제로 쓰는 필드)로 직접 조회한다
+         (crm_member_assignments 경유는 트레이너 CRM 계정이 없으면 항상 비어 보이는 문제가 있었음). -->
     <select id="findPtMembers" resultMap="ptMemberResultMap">
-        SELECT mt.user_id AS member_id,
+        SELECT u.user_id AS member_id,
                up.name    AS member_name,
                up.contact AS member_phone,
                up.tier,
-               mt.remaining AS pt_remaining,
+               COALESCE(up.pt_sessions_left, 0) AS purchased_pt,
+               COALESCE(up.service_pt_sessions_left, 0) AS service_pt,
                tup.name AS trainer_name
-          FROM member_tickets mt
-          LEFT JOIN user_profiles up ON mt.user_id = up.user_id
-          LEFT JOIN crm_member_assignments cma ON cma.member_id = mt.user_id
-          LEFT JOIN crm_users cu  ON cu.id = cma.trainer_id
-          LEFT JOIN user_profiles tup ON cu.app_user_id = tup.user_id
-         WHERE mt.ticket_type = 'ONE_POINT'
-        <if test="lowStock">AND mt.remaining &lt; 5</if>
-         ORDER BY mt.remaining ASC, up.name ASC
+          FROM users u
+          JOIN user_profiles up ON up.user_id = u.user_id
+          LEFT JOIN user_profiles tup ON tup.user_id = up.trainer_id
+         WHERE u.role = 'MEMBER' AND u.is_active = 1
+           AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) > 0
+        <if test="lowStock">AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) &lt; 5</if>
+         ORDER BY (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) ASC, up.name ASC
          LIMIT #{size} OFFSET #{offset}
     </select>
 
     <select id="countPtMembers" resultType="long">
-        SELECT COUNT(*) FROM member_tickets mt
-         WHERE mt.ticket_type = 'ONE_POINT'
-        <if test="lowStock">AND mt.remaining &lt; 5</if>
+        SELECT COUNT(*)
+          FROM users u
+          JOIN user_profiles up ON up.user_id = u.user_id
+         WHERE u.role = 'MEMBER' AND u.is_active = 1
+           AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) > 0
+        <if test="lowStock">AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) &lt; 5</if>
     </select>
+
+    <update id="adjustPtSessions">
+        UPDATE user_profiles SET pt_sessions_left = GREATEST(0, pt_sessions_left + #{delta}) WHERE user_id = #{memberId}
+    </update>
+
+    <update id="adjustServicePtSessions">
+        UPDATE user_profiles SET service_pt_sessions_left = GREATEST(0, service_pt_sessions_left + #{delta}) WHERE user_id = #{memberId}
+    </update>
 
 </mapper>

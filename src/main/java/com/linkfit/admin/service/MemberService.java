@@ -3,6 +3,7 @@ package com.linkfit.admin.service;
 import com.linkfit.admin.domain.Member;
 import com.linkfit.admin.domain.MemberTicket;
 import com.linkfit.admin.domain.Membership;
+import com.linkfit.admin.domain.TicketLog;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,7 @@ public interface MemberService {
     long count(String keyword, String status, String tier, Long gymId, List<String> trainerIds,
                Integer minDaysLeft, Integer maxDaysLeft, Integer minPtRemaining, Integer minAbsentDays);
     Optional<Member> findById(String id, Long gymId);
+    boolean existsByNameAndPhone(String name, String phone);
     Member save(Member member, Long gymId);
     Member update(String id, Member member, Long gymId);
     void delete(String id, Long gymId);
@@ -24,7 +26,15 @@ public interface MemberService {
     void freeze(String id, String startDate, String endDate, Long gymId);
     void withdraw(String id, Long gymId);
     List<Membership> findMemberships(String id);
-    void addMembership(Membership membership);
+    void addMembership(Membership membership, Long gymId);
     List<MemberTicket> findTickets(String id);
+    java.util.Map<String, Object> ticketTotals(Long gymId);
     void chargeTicket(String id, String ticketType, int amount, String description);
+    List<TicketLog> findTicketLogs(Long gymId, String ticketType, String keyword, int page, int size);
+    long countTicketLogs(Long gymId, String ticketType, String keyword);
+
+    // 회원 간 상품 양도 (이용권/락커/운동복 — 행 단위). PT는 pool 단위라 별도 메서드 사용.
+    void transferMembership(Long membershipId, String targetMemberId, Long gymId);
+    // PT는 특정 구매건이 아니라 회원 전체 PT 잔여 풀(구매+서비스)을 그대로 이전한다.
+    void transferPtSessions(String sourceMemberId, String targetMemberId, Long gymId);
 }

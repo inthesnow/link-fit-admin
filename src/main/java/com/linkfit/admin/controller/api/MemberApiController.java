@@ -5,6 +5,7 @@ import com.linkfit.admin.domain.CrmMemberNote;
 import com.linkfit.admin.domain.CrmMemberTag;
 import com.linkfit.admin.domain.Member;
 import com.linkfit.admin.domain.MemberTicket;
+import com.linkfit.admin.domain.TicketLog;
 import com.linkfit.admin.security.CrmUserDetails;
 import com.linkfit.admin.service.CrmMemberService;
 import com.linkfit.admin.service.MemberService;
@@ -72,6 +73,13 @@ public class MemberApiController {
     public ApiResponse<Member> create(@RequestBody Member member,
                                        @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Member] POST /api/members");
+        if (member.getName() == null || member.getName().isBlank()
+                || member.getPhone() == null || member.getPhone().isBlank()) {
+            return ApiResponse.error("이름과 전화번호를 모두 입력해주세요.");
+        }
+        if (memberService.existsByNameAndPhone(member.getName(), member.getPhone())) {
+            return ApiResponse.error("동일한 이름과 전화번호의 회원이 이미 존재합니다.");
+        }
         return ApiResponse.ok(memberService.save(member, principal.getGymId()));
     }
 
@@ -158,10 +166,11 @@ public class MemberApiController {
 
     @PostMapping("/{id}/memberships")
     public ApiResponse<Void> addMembership(@PathVariable String id,
-                                           @RequestBody com.linkfit.admin.domain.Membership membership) {
+                                           @RequestBody com.linkfit.admin.domain.Membership membership,
+                                           @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Member] POST /api/members/{id}/memberships - id={}", id);
         membership.setMemberId(id);
-        memberService.addMembership(membership);
+        memberService.addMembership(membership, principal.getGymId());
         return ApiResponse.ok();
     }
 
@@ -169,6 +178,13 @@ public class MemberApiController {
     public ApiResponse<List<MemberTicket>> getTickets(@PathVariable String id) {
         log.info("[Member] GET /api/members/{id}/tickets - id={}", id);
         return ApiResponse.ok(memberService.findTickets(id));
+    }
+
+    // 활성 회원 전체의 ONE_POINT/FEEDBACK 잔량 합계 (구독권/티켓 관리 페이지 상단 요약 카드용)
+    @GetMapping("/tickets/totals")
+    public ApiResponse<Map<String, Object>> ticketTotals(@AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] GET /api/members/tickets/totals");
+        return ApiResponse.ok(memberService.ticketTotals(principal.getGymId()));
     }
 
     @PostMapping("/{id}/tickets/charge")
@@ -179,6 +195,21 @@ public class MemberApiController {
         String description = (String) body.get("description");
         memberService.chargeTicket(id, ticketType, amount, description);
         return ApiResponse.ok();
+    }
+
+    // 티켓 지급/차감 사용내역 (구독권/티켓 관리 > 사용내역 탭)
+    @GetMapping("/tickets/logs")
+    public ApiResponse<Map<String, Object>> ticketLogs(
+            @RequestParam(defaultValue = "") String ticketType,
+            @RequestParam(defaultValue = "") String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] GET /api/members/tickets/logs - ticketType={}, keyword={}", ticketType, keyword);
+        Long gymId = principal.getGymId();
+        List<TicketLog> logs = memberService.findTicketLogs(gymId, ticketType, keyword, page, size);
+        long total = memberService.countTicketLogs(gymId, ticketType, keyword);
+        return ApiResponse.ok(Map.of("logs", logs, "total", total));
     }
 
     // ── CRM Sector 2 ──────────────────────────────────────────

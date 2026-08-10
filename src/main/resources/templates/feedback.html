@@ -22,7 +22,7 @@
         </div>
     </header>
 
-    <!-- 상품 요약 카드 (5개) -->
+    <!-- 상품 요약 카드 (7개: 구독권 3종 + 이용권 4종) -->
     <div class="product-cards-row" id="productCardsRow">
         <div class="product-card sub-card" onclick="openSubModal('LIGHT_FIT')">
             <div class="product-card-label">라이트핏</div>
@@ -54,12 +54,25 @@
             <div class="product-card-unit">장 보유</div>
             <button class="btn btn-secondary product-card-btn" onclick="event.stopPropagation();openChargeModal(null,'FEEDBACK')">지급</button>
         </div>
+        <div class="product-card ticket-card" onclick="openChargeModal(null,'PHOTO')">
+            <div class="product-card-label">잔여 사진피드백</div>
+            <div class="product-card-val" id="cntPhoto">-</div>
+            <div class="product-card-unit">장 보유</div>
+            <button class="btn btn-secondary product-card-btn" onclick="event.stopPropagation();openChargeModal(null,'PHOTO')">지급</button>
+        </div>
+        <div class="product-card ticket-card" onclick="openChargeModal(null,'VIDEO')">
+            <div class="product-card-label">잔여 영상피드백</div>
+            <div class="product-card-val" id="cntVideo">-</div>
+            <div class="product-card-unit">장 보유</div>
+            <button class="btn btn-secondary product-card-btn" onclick="event.stopPropagation();openChargeModal(null,'VIDEO')">지급</button>
+        </div>
     </div>
 
     <!-- 탭 네비게이션 -->
     <div style="display:flex;border-bottom:1px solid var(--border);padding:0 24px">
         <button id="tabSub"    class="page-tab active" onclick="switchTab('sub')">구독권 현황</button>
         <button id="tabTicket" class="page-tab"        onclick="switchTab('ticket')">티켓 현황</button>
+        <button id="tabLogs"   class="page-tab"        onclick="switchTab('logs')">사용내역</button>
     </div>
 
     <!-- 구독권 탭 -->
@@ -123,15 +136,49 @@
                         <th>전화번호</th>
                         <th>원포인트카드</th>
                         <th>피드백티켓</th>
+                        <th>사진피드백</th>
+                        <th>영상피드백</th>
                         <th>관리</th>
                     </tr>
                 </thead>
                 <tbody id="ticketTableBody">
-                    <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">로딩 중...</td></tr>
+                    <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">로딩 중...</td></tr>
                 </tbody>
             </table>
         </div>
         <div class="pagination" id="ticketPagination"></div>
+    </div>
+
+    <!-- 사용내역 탭 -->
+    <div id="paneLogs" style="display:none">
+        <div class="search-bar">
+            <select class="filter-select" id="logsTypeFilter" onchange="logsPage=0;loadTicketLogs()">
+                <option value="">전체 티켓 종류</option>
+                <option value="ONE_POINT">원포인트카드</option>
+                <option value="FEEDBACK">피드백티켓</option>
+                <option value="PHOTO">사진피드백</option>
+                <option value="VIDEO">영상피드백</option>
+            </select>
+            <input type="text" class="search-input" id="logsKeyword" placeholder="회원명 검색" onkeyup="if(event.key==='Enter'){logsPage=0;loadTicketLogs()}">
+            <button class="btn btn-secondary" onclick="logsPage=0;loadTicketLogs()">조회</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>일시</th>
+                        <th>회원명</th>
+                        <th>티켓 종류</th>
+                        <th>구분</th>
+                        <th>내용</th>
+                    </tr>
+                </thead>
+                <tbody id="logsTableBody">
+                    <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">로딩 중...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination" id="logsPagination"></div>
     </div>
 </main>
 
@@ -219,6 +266,8 @@
                 <select class="form-select" id="chargeType">
                     <option value="ONE_POINT">원포인트카드</option>
                     <option value="FEEDBACK">피드백티켓</option>
+                    <option value="PHOTO">사진피드백</option>
+                    <option value="VIDEO">영상피드백</option>
                 </select>
             </div>
             <div class="form-group">
@@ -294,7 +343,7 @@
 </style>
 
 <script>
-let subPage = 0, ticketPage = 0;
+let subPage = 0, ticketPage = 0, logsPage = 0;
 const pageSize = 20;
 let activeTab = 'sub';
 let subTargetMemberId = null, subTargetMemberName = null;
@@ -302,8 +351,19 @@ let chargeTargetMemberId = null, chargeTargetMemberName = null;
 
 const tierLabel = { BASIC: '기본', LIGHT_FIT: '라이트핏', REGULAR_FIT: '레귤러핏', INTENSIVE_FIT: '인텐시브핏' };
 const tierBadge = { BASIC: 'badge-pending', LIGHT_FIT: 'badge-active', REGULAR_FIT: 'badge-admin', INTENSIVE_FIT: 'badge-super' };
+const ticketTypeLabel = { ONE_POINT: '원포인트카드', FEEDBACK: '피드백티켓', PHOTO: '사진피드백', VIDEO: '영상피드백' };
+const actionTypeLabel = { USE: '사용', CHARGE: '지급', EXPIRE: '만료', GIFT: '선물' };
+const actionTypeBadge = { USE: 'badge-pending', CHARGE: 'badge-active', EXPIRE: 'badge-expired', GIFT: 'badge-super' };
 
 function csrfHeaders() { return { 'Content-Type': 'application/json' }; }
+
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
+}
 
 // ── 담당 트레이너 필터 (다중 선택, 구독권/티켓 탭 공용) ────────
 let trainerList = [];
@@ -395,29 +455,19 @@ async function loadProductSummary() {
         }
     });
 
-    // FEEDBACK/ONE_POINT 총 잔량: 활성 회원 샘플 집계 (100명 기준)
+    // FEEDBACK/ONE_POINT 총 잔량: 활성 회원 전체 기준 서버 집계
     loadTicketTotals();
 }
 
 async function loadTicketTotals() {
     try {
-        const res  = await fetch(`/api/members?status=ACTIVE&page=0&size=100`);
+        const res  = await fetch(`/api/members/tickets/totals`);
         const json = await res.json();
-        if (!json.success || !json.data?.members) return;
-        const members = json.data.members;
-        const results = await Promise.allSettled(
-            members.map(m => fetch(`/api/members/${m.id}/tickets`).then(r => r.json()))
-        );
-        let opTotal = 0, fbTotal = 0;
-        results.forEach(r => {
-            if (r.status === 'fulfilled' && r.value.success) {
-                const list = r.value.data || [];
-                opTotal += list.find(t => t.ticketType === 'ONE_POINT')?.remaining || 0;
-                fbTotal += list.find(t => t.ticketType === 'FEEDBACK')?.remaining  || 0;
-            }
-        });
-        document.getElementById('cntOnePoint').textContent = opTotal;
-        document.getElementById('cntFeedback').textContent = fbTotal;
+        if (!json.success) return;
+        document.getElementById('cntOnePoint').textContent = json.data?.onePoint ?? 0;
+        document.getElementById('cntFeedback').textContent = json.data?.feedback ?? 0;
+        document.getElementById('cntPhoto').textContent    = json.data?.photo ?? 0;
+        document.getElementById('cntVideo').textContent    = json.data?.video ?? 0;
     } catch (e) {}
 }
 
@@ -425,12 +475,13 @@ async function loadTicketTotals() {
 
 function switchTab(tab) {
     activeTab = tab;
-    ['sub', 'ticket'].forEach(t => {
+    ['sub', 'ticket', 'logs'].forEach(t => {
         document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
         document.getElementById('pane' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
     });
     if (tab === 'sub')    loadSubs();
     if (tab === 'ticket') loadTickets();
+    if (tab === 'logs')   loadTicketLogs();
 }
 
 // ── 구독권 탭 ─────────────────────────────────────────────────
@@ -480,7 +531,7 @@ function renderSubTable(members, total) {
     tbody.innerHTML = members.map(m => `
         <tr>
             <td style="font-weight:500">${escHtml(m.name || m.id)}</td>
-            <td>${m.phone || '-'}</td>
+            <td>${formatPhone(m.phone) || '-'}</td>
             <td><span class="badge ${tierBadge[m.tier] || 'badge-pending'}">${tierLabel[m.tier] || m.tier || '-'}</span></td>
             <td>${subValidityBadge(m)}</td>
             <td style="display:flex;gap:6px">
@@ -503,22 +554,24 @@ async function loadTickets() {
         const members = json.data?.members || [];
         const total   = json.data?.total   || 0;
 
-        // 각 회원의 원포인트/피드백 티켓 병렬 로드
+        // 각 회원의 원포인트/피드백/사진/영상 티켓 병렬 로드
         const ticketResults = await Promise.allSettled(
             members.map(m => fetch(`/api/members/${m.id}/tickets`).then(r => r.json()))
         );
         const items = members.map((m, i) => {
             const tRes = ticketResults[i];
-            let op = 0, fb = 0;
+            let op = 0, fb = 0, ph = 0, vd = 0;
             if (tRes.status === 'fulfilled' && tRes.value.success) {
                 const list = tRes.value.data || [];
                 op = list.find(t => t.ticketType === 'ONE_POINT')?.remaining ?? 0;
                 fb = list.find(t => t.ticketType === 'FEEDBACK')?.remaining ?? 0;
+                ph = list.find(t => t.ticketType === 'PHOTO')?.remaining ?? 0;
+                vd = list.find(t => t.ticketType === 'VIDEO')?.remaining ?? 0;
             }
-            return { memberId: m.id, memberName: m.name, memberPhone: m.phone, onePoint: op, feedback: fb };
+            return { memberId: m.id, memberName: m.name, memberPhone: m.phone, onePoint: op, feedback: fb, photo: ph, video: vd };
         });
 
-        const filtered = lowStock ? items.filter(m => m.onePoint < 5 || m.feedback < 5) : items;
+        const filtered = lowStock ? items.filter(m => m.onePoint < 5 || m.feedback < 5 || m.photo < 5 || m.video < 5) : items;
         renderTicketTable(filtered, total);
     } catch(e) {}
 }
@@ -526,29 +579,68 @@ async function loadTickets() {
 function renderTicketTable(items, total) {
     const tbody = document.getElementById('ticketTableBody');
     if (!items.length) {
-        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">데이터가 없습니다.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">데이터가 없습니다.</td></tr>`;
         renderPagination('ticketPagination', total, ticketPage, i => { ticketPage = i; loadTickets(); });
         return;
     }
     tbody.innerHTML = items.map(m => {
         const op = m.onePoint || 0;
         const fb = m.feedback || 0;
-        const opCls = op === 0 ? 'ticket-zero' : op < 5 ? 'ticket-low' : 'ticket-ok';
-        const fbCls = fb === 0 ? 'ticket-zero' : fb < 5 ? 'ticket-low' : 'ticket-ok';
+        const ph = m.photo || 0;
+        const vd = m.video || 0;
+        const cls = v => v === 0 ? 'ticket-zero' : v < 5 ? 'ticket-low' : 'ticket-ok';
         return `<tr>
             <td style="font-weight:500">${escHtml(m.memberName || m.memberId)}</td>
-            <td>${m.memberPhone || '-'}</td>
-            <td><span class="ticket-badge ${opCls}">${op}장</span></td>
-            <td><span class="ticket-badge ${fbCls}">${fb}장</span></td>
-            <td style="display:flex;gap:6px">
+            <td>${formatPhone(m.memberPhone) || '-'}</td>
+            <td><span class="ticket-badge ${cls(op)}">${op}장</span></td>
+            <td><span class="ticket-badge ${cls(fb)}">${fb}장</span></td>
+            <td><span class="ticket-badge ${cls(ph)}">${ph}장</span></td>
+            <td><span class="ticket-badge ${cls(vd)}">${vd}장</span></td>
+            <td style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="btn btn-primary"   style="padding:5px 10px;font-size:12px"
                         onclick="openChargeModal('${m.memberId}','ONE_POINT','${escHtml(m.memberName||m.memberId)}')">원포인트</button>
                 <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px"
                         onclick="openChargeModal('${m.memberId}','FEEDBACK','${escHtml(m.memberName||m.memberId)}')">피드백</button>
+                <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px"
+                        onclick="openChargeModal('${m.memberId}','PHOTO','${escHtml(m.memberName||m.memberId)}')">사진</button>
+                <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px"
+                        onclick="openChargeModal('${m.memberId}','VIDEO','${escHtml(m.memberName||m.memberId)}')">영상</button>
             </td>
         </tr>`;
     }).join('');
     renderPagination('ticketPagination', total, ticketPage, i => { ticketPage = i; loadTickets(); });
+}
+
+// ── 사용내역 탭 ──────────────────────────────────────────────
+
+async function loadTicketLogs() {
+    const ticketType = document.getElementById('logsTypeFilter').value;
+    const keyword     = document.getElementById('logsKeyword').value;
+    try {
+        const res  = await fetch(`/api/members/tickets/logs?ticketType=${encodeURIComponent(ticketType)}&keyword=${encodeURIComponent(keyword)}&page=${logsPage}&size=${pageSize}`);
+        const json = await res.json();
+        const logs  = json.data?.logs  || [];
+        const total = json.data?.total || 0;
+        renderLogsTable(logs, total);
+    } catch (e) {}
+}
+
+function renderLogsTable(logs, total) {
+    const tbody = document.getElementById('logsTableBody');
+    if (!logs.length) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted)">사용내역이 없습니다.</td></tr>`;
+        renderPagination('logsPagination', total, logsPage, i => { logsPage = i; loadTicketLogs(); });
+        return;
+    }
+    tbody.innerHTML = logs.map(l => `
+        <tr>
+            <td>${l.createdAt || '-'}</td>
+            <td style="font-weight:500">${escHtml(l.userName || l.userId)}</td>
+            <td>${ticketTypeLabel[l.ticketType] || l.ticketType}</td>
+            <td><span class="badge ${actionTypeBadge[l.actionType] || 'badge-pending'}">${actionTypeLabel[l.actionType] || l.actionType}</span></td>
+            <td>${escHtml(l.description || '-')}</td>
+        </tr>`).join('');
+    renderPagination('logsPagination', total, logsPage, i => { logsPage = i; loadTicketLogs(); });
 }
 
 // ── 구독권 지급 모달 ──────────────────────────────────────────
@@ -593,7 +685,7 @@ async function searchSubMember() {
         el.innerHTML = list.map(m => `
             <div class="member-result-item" onclick="selectSubMember('${m.id}','${escHtml(m.name||m.id)}')">
                 ${escHtml(m.name || m.id)}
-                ${m.phone ? `<span style="color:var(--text-muted);margin-left:8px;font-size:12px">${m.phone}</span>` : ''}
+                ${m.phone ? `<span style="color:var(--text-muted);margin-left:8px;font-size:12px">${formatPhone(m.phone)}</span>` : ''}
             </div>`).join('');
     }
     el.style.display = '';
@@ -690,7 +782,7 @@ async function searchChargeMember() {
         el.innerHTML = list.map(m => `
             <div class="member-result-item" onclick="selectChargeMember('${m.id}','${escHtml(m.name||m.id)}')">
                 ${escHtml(m.name || m.id)}
-                ${m.phone ? `<span style="color:var(--text-muted);margin-left:8px;font-size:12px">${m.phone}</span>` : ''}
+                ${m.phone ? `<span style="color:var(--text-muted);margin-left:8px;font-size:12px">${formatPhone(m.phone)}</span>` : ''}
             </div>`).join('');
     }
     el.style.display = '';
@@ -721,8 +813,8 @@ async function chargeTicket() {
         closeChargeModal();
         loadProductSummary();
         if (activeTab === 'ticket') loadTickets();
-        const typeLabel = ticketType === 'ONE_POINT' ? '원포인트카드' : '피드백티켓';
-        alert(`${chargeTargetMemberName}에게 ${typeLabel} ${amount}장 충전 완료`);
+        if (activeTab === 'logs')   loadTicketLogs();
+        alert(`${chargeTargetMemberName}에게 ${ticketTypeLabel[ticketType] || ticketType} ${amount}장 충전 완료`);
     } else {
         alert(json.message || '충전에 실패했습니다.');
     }

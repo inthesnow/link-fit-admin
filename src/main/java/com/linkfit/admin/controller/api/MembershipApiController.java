@@ -7,6 +7,7 @@ import com.linkfit.admin.mapper.MemberMapper;
 
 import com.linkfit.admin.security.CrmUserDetails;
 import com.linkfit.admin.service.CrmMemberService;
+import com.linkfit.admin.service.MemberService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,10 +24,44 @@ public class MembershipApiController {
 
     private final MemberMapper memberMapper;
     private final CrmMemberService crmMemberService;
+    private final MemberService memberService;
 
-    public MembershipApiController(MemberMapper memberMapper, CrmMemberService crmMemberService) {
+    public MembershipApiController(MemberMapper memberMapper, CrmMemberService crmMemberService, MemberService memberService) {
         this.memberMapper     = memberMapper;
         this.crmMemberService = crmMemberService;
+        this.memberService    = memberService;
+    }
+
+    // 이용권/락커/운동복 양도 (PT는 /api/pt/members/{id}/transfer 사용).
+    // 검증은 여기서 다 하고 ApiResponse.error로 구체적 메시지를 내려준다 — 서비스 계층에서
+    // IllegalArgumentException을 던지면 GlobalExceptionHandler가 전부 "서버 오류가 발생했습니다"로
+    // 뭉개버려서 사용자에게 원인이 안 보이기 때문.
+    @PostMapping("/{id}/transfer")
+    public ApiResponse<Void> transfer(@PathVariable Long id, @RequestBody Map<String, String> body,
+                                       @AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Membership] POST /api/memberships/{}/transfer - body={}", id, body);
+        String targetMemberId = body.get("targetMemberId");
+        if (targetMemberId == null || targetMemberId.isBlank()) {
+            return ApiResponse.error("양도받을 회원을 선택해주세요.");
+        }
+        Membership target = memberMapper.findMembershipById(id).orElse(null);
+        if (target == null) {
+            return ApiResponse.error("이용권을 찾을 수 없습니다.");
+        }
+        if ("PT".equals(target.getType())) {
+            return ApiResponse.error("PT는 개별 양도 대상이 아닙니다. PT 잔여 이전 기능을 이용해주세요.");
+        }
+        if (target.getStatus() != null) {
+            return ApiResponse.error("이미 양도되었거나 더 이상 유효하지 않은 이용권입니다.");
+        }
+        if (target.getMemberId().equals(targetMemberId)) {
+            return ApiResponse.error("본인에게는 양도할 수 없습니다.");
+        }
+        if (!memberMapper.existsInGym(targetMemberId, principal.getGymId())) {
+            return ApiResponse.error("대상 회원을 찾을 수 없습니다.");
+        }
+        memberService.transferMembership(id, targetMemberId, principal.getGymId());
+        return ApiResponse.ok();
     }
 
     @GetMapping("/expiring")
@@ -55,10 +90,60 @@ public class MembershipApiController {
         return ApiResponse.ok();
     }
 
+    @PatchMapping("/{id}/adjust-period")
+    public ApiResponse<Map<String, String>> adjustPeriod(@PathVariable Long id, @RequestBody Map<String, Integer> body) {
+        log.info("[Membership] PATCH /api/memberships/{}/adjust-period - body={}", id, body);
+        Membership ms = memberMapper.findMembershipById(id)
+                .orElseThrow(() -> new IllegalArgumentException("이용권을 찾을 수 없습니다."));
+        int months = body.getOrDefault("months", 0);
+        int days   = body.getOrDefault("days", 0);
+        java.time.LocalDate newEndDate = ms.getEndDate().plusMonths(months).plusDays(days);
+        memberMapper.updateMembershipEndDate(id, newEndDate.toString());
+        return ApiResponse.ok(Map.of("endDate", newEndDate.toString()));
+    }
+
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         log.info("[Membership] DELETE /api/memberships/{}", id);
+        Membership target = memberMapper.findMembershipById(id).orElse(null);
+        if (target != null && target.getPackageId() != null) {
+            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId()).stream()
+                    .filter(m -> target.getPackageId().equals(m.getPackageId()) && !m.getId().equals(id))
+                    .toList();
+            boolean holdsAmount = target.getPrice() > 0 || target.getDiscountAmount() > 0 || target.getPaidAmount() > 0;
+            if (holdsAmount && !siblings.isEmpty()) {
+                // 이 구성이 금액을 들고 있었다면, 남은 구성 중 만료일이 가장 먼 것에 금액을 이전해
+                // 개별 구성 회수만으로 전체 금액/미납금 표시가 사라지지 않게 한다.
+                // PT는 기간 없이 무기한(가짜 만료일)으로 생성되므로, 실제 기간이 있는 구성이
+                // 남아있다면 그쪽을 우선하고 PT만 남았을 때만 PT로 이전한다.
+                Membership newHolder = siblings.stream()
+                        .filter(m -> !"PT".equals(m.getType()))
+                        .max(java.util.Comparator.comparing(Membership::getEndDate))
+                        .orElseGet(() -> siblings.stream()
+                                .max(java.util.Comparator.comparing(Membership::getEndDate))
+                                .orElse(siblings.get(0)));
+                memberMapper.updateMembershipAmounts(newHolder.getId(),
+                        target.getPrice(), target.getDiscountAmount(), target.getPaidAmount(),
+                        target.getPaymentMethod(), target.getRegType());
+            }
+        }
+        // PT 구성을 회수하면 등록 시 충전했던 실제 PT 잔여 세션도 그만큼 되돌린다
+        // (이미 사용한 세션이 있으면 0 밑으로는 안 내려가고 거기서 멈춘다).
+        if (target != null && "PT".equals(target.getType()) && target.getSessionCount() != null && target.getSessionCount() != 0) {
+            memberMapper.adjustPtSessions(target.getMemberId(), -target.getSessionCount());
+        }
         memberMapper.deleteMembership(id);
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/member/{memberId}/package/{packageId}")
+    public ApiResponse<Void> deleteByPackage(@PathVariable String memberId, @PathVariable Long packageId) {
+        log.info("[Membership] DELETE all by package - memberId={}, packageId={}", memberId, packageId);
+        memberMapper.findMembershipsByMemberId(memberId).stream()
+                .filter(m -> packageId.equals(m.getPackageId()) && "PT".equals(m.getType())
+                        && m.getSessionCount() != null && m.getSessionCount() != 0)
+                .forEach(m -> memberMapper.adjustPtSessions(memberId, -m.getSessionCount()));
+        memberMapper.deleteMembershipsByMemberAndPackage(memberId, packageId);
         return ApiResponse.ok();
     }
 

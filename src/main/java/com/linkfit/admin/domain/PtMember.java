@@ -5,7 +5,8 @@ public class PtMember {
     private String memberName;
     private String memberPhone;
     private String tier;
-    private int ptRemaining;
+    private int purchasedPt;
+    private int servicePt;
     private String trainerName;
 
     public PtMember() {}
@@ -18,8 +19,11 @@ public class PtMember {
     public void setMemberPhone(String memberPhone) { this.memberPhone = memberPhone; }
     public String getTier()       { return tier; }
     public void setTier(String tier) { this.tier = tier; }
-    public int getPtRemaining()   { return ptRemaining; }
-    public void setPtRemaining(int ptRemaining) { this.ptRemaining = ptRemaining; }
+    public int getPurchasedPt()   { return purchasedPt; }
+    public void setPurchasedPt(int purchasedPt) { this.purchasedPt = purchasedPt; }
+    public int getServicePt()     { return servicePt; }
+    public void setServicePt(int servicePt) { this.servicePt = servicePt; }
+    public int getPtRemaining()   { return purchasedPt + servicePt; }
     public String getTrainerName() { return trainerName; }
     public void setTrainerName(String trainerName) { this.trainerName = trainerName; }
 }
