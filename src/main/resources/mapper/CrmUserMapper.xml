@@ -12,7 +12,9 @@
         <result property="email"        column="email"/>
         <result property="username"     column="username"/>
         <result property="passwordHash" column="password_hash"/>
+        <result property="secondPasswordHash" column="second_password_hash"/>
         <result property="role"         column="role"/>
+        <result property="lockedCategories" column="locked_categories"/>
         <result property="active"       column="is_active"/>
         <result property="createdAt"    column="created_at"/>
     </resultMap>
@@ -43,11 +45,35 @@
           AND cu.is_active = 1
     </select>
 
+    <select id="findByAppUserId" resultMap="crmUserResultMap">
+        SELECT cu.*, g.branch_code
+        FROM crm_users cu
+        JOIN gym g ON cu.gym_id = g.id
+        WHERE cu.app_user_id = #{appUserId}
+        LIMIT 1
+    </select>
+
     <insert id="insert">
         INSERT INTO crm_users
             (id, gym_id, app_user_id, name, email, username, password_hash, role, is_active)
         VALUES
             (#{id}, #{gymId}, #{appUserId}, #{name}, #{email}, #{username}, #{passwordHash}, #{role}, #{active})
     </insert>
+
+    <update id="updateSecondPassword">
+        UPDATE crm_users SET second_password_hash = #{secondPasswordHash} WHERE id = #{id}
+    </update>
+
+    <update id="updateLockedCategories">
+        UPDATE crm_users SET locked_categories = #{lockedCategories} WHERE id = #{id}
+    </update>
+
+    <update id="reactivateAsTrainer">
+        UPDATE crm_users SET is_active = 1, role = 'trainer', gym_id = #{gymId} WHERE id = #{id}
+    </update>
+
+    <update id="deactivateByAppUserId">
+        UPDATE crm_users SET is_active = 0 WHERE app_user_id = #{appUserId}
+    </update>
 
 </mapper>

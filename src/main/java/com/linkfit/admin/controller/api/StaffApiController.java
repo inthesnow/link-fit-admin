@@ -55,10 +55,34 @@ public class StaffApiController {
             .orElse(ResponseEntity.notFound().build());
     }
 
+    // 트레이너 지정은 이 페이지에서만 진행한다. 신규 계정을 만드는 것이 아니라, 이름+전화번호로
+    // 이미 앱에 가입된 사용자를 찾아 그 계정의 role만 TRAINER로 승격시킨다 (기존 이력 보존,
+    // 중복 계정 생성 방지). 일치하는 앱 사용자가 없으면 등록을 거부한다.
     @PostMapping
     public ApiResponse<Staff> create(@RequestBody Staff staff) {
-        log.info("[Staff] POST /api/staff");
-        return ApiResponse.ok(staffService.save(staff));
+        log.info("[Staff] POST /api/staff - name={}", staff.getName());
+        String name = staff.getName() == null ? "" : staff.getName().trim();
+        String phone = staff.getPhone() == null ? "" : staff.getPhone().replaceAll("[^0-9]", "");
+        if (name.isEmpty() || phone.isEmpty()) {
+            return ApiResponse.error("이름과 전화번호를 입력해주세요.");
+        }
+        Staff matched = staffService.findAppUserByNameAndPhone(name, phone).orElse(null);
+        if (matched == null) {
+            return ApiResponse.error("해당 이름/전화번호로 가입된 앱 사용자를 찾을 수 없습니다. 먼저 앱에 회원가입이 되어 있어야 트레이너로 지정할 수 있습니다.");
+        }
+        if ("TRAINER".equals(matched.getRole())) {
+            return ApiResponse.error("이미 트레이너로 등록되어 있는 사용자입니다.");
+        }
+        if ("ADMIN".equals(matched.getRole())) {
+            return ApiResponse.error("관리자 계정은 트레이너로 전환할 수 없습니다.");
+        }
+        // 앱 가입 시 헬스장을 선택하지 않은 사용자는 트레이너로 지정할 수 없다 (소속 없는
+        // 트레이너를 만들지 않기 위함 — 회원 쪽 트레이너 노출 필터링이 소속 매칭 기반이라
+        // 소속 없는 트레이너가 생기면 그 필터링 자체가 무의미해진다).
+        if (staffService.findTrainerGymId(matched.getId()) == null) {
+            return ApiResponse.error("이 사용자는 앱에서 소속 헬스장을 선택하지 않았습니다. 앱에서 헬스장을 먼저 선택해야 트레이너로 지정할 수 있습니다.");
+        }
+        return ApiResponse.ok(staffService.promoteToTrainer(matched.getId()));
     }
 
     @PutMapping("/{id}")
@@ -67,10 +91,12 @@ public class StaffApiController {
         return ApiResponse.ok(staffService.update(id, staff));
     }
 
+    // "삭제"가 아니라 트레이너 권한 회수. 앱 계정은 그대로 두고 role만 MEMBER로 되돌리며,
+    // CRM 로그인 계정은 비활성화한다 (계정 자체/이력은 보존).
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable String id) {
         log.info("[Staff] DELETE /api/staff/{id} - id={}", id);
-        staffService.delete(id);
+        staffService.revokeTrainer(id);
         return ApiResponse.ok();
     }
 

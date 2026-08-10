@@ -38,22 +38,36 @@
         AND u.user_id = #{id}
     </select>
 
-    <insert id="insertUser">
-        INSERT INTO users (user_id, email, role, is_active) VALUES (#{id}, #{email}, 'TRAINER', 1)
-    </insert>
+    <select id="findAppUserByNameAndPhone" resultMap="staffResultMap">
+        SELECT u.user_id AS id, u.email, up.name, up.contact AS phone,
+               u.role,
+               CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+               DATE(u.created_at) AS hire_date
+        FROM users u
+        LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        WHERE up.name = #{name} AND up.contact = #{phone}
+        LIMIT 1
+    </select>
 
-    <insert id="insertProfile">
-        INSERT INTO user_profiles (user_id, name, contact) VALUES (#{id}, #{name}, #{phone})
-    </insert>
+    <update id="promoteToTrainer">
+        UPDATE users SET role = 'TRAINER' WHERE user_id = #{id}
+    </update>
+
+    <select id="findGymIdByUserId" resultType="long">
+        SELECT gym_id FROM user_gym
+        WHERE user_id = #{userId} AND is_active = 1
+        ORDER BY joined_at ASC
+        LIMIT 1
+    </select>
 
     <update id="update">
         UPDATE user_profiles SET name=#{name}, contact=#{phone} WHERE user_id=#{id};
         UPDATE users SET email=#{email} WHERE user_id=#{id}
     </update>
 
-    <delete id="delete">
-        DELETE FROM users WHERE user_id=#{id}
-    </delete>
+    <update id="revokeTrainer">
+        UPDATE users SET role = 'MEMBER' WHERE user_id = #{id}
+    </update>
 
     <update id="updateRole">
         UPDATE users SET is_active = CASE WHEN #{role} = 'ACTIVE' THEN 1 ELSE 0 END WHERE user_id=#{id}
@@ -61,26 +75,20 @@
 
     <!-- ── Sector 13: 트레이너 CRM 대시보드 ────────────────── -->
 
+    <!-- 담당 회원 수/목록은 user_profiles.trainer_id 기준(앱에서 실제로 쓰는 필드)으로 집계.
+         crm_member_assignments는 트레이너의 crm_users 행이 있어야 매칭되는데, 현재 트레이너
+         계정은 crm_users에 대응 행이 없어 항상 0/빈 목록만 나오는 문제가 있었음. -->
     <select id="findDashboard" resultType="map">
         SELECT
-            cu.id                                                        AS crmUserId,
-            COUNT(DISTINCT cma.member_id)                                AS assignedMembers,
-            SUM(CASE WHEN cfr.status IN ('pending','in_progress')
-                     THEN 1 ELSE 0 END)                                  AS pendingFeedback,
-            SUM(CASE WHEN crr.status = 'pending'
-                     THEN 1 ELSE 0 END)                                  AS pendingReregistration
-          FROM crm_users cu
-          LEFT JOIN crm_member_assignments cma
-                 ON cma.trainer_id = cu.id AND cma.gym_id = #{gymId}
-          LEFT JOIN crm_feedback_requests cfr
-                 ON cfr.trainer_id = cu.id
-                AND cfr.status IN ('pending','in_progress')
-          LEFT JOIN crm_re_registration crr
-                 ON crr.assigned_to = cu.id
-                AND crr.status = 'pending'
-         WHERE cu.app_user_id = #{appUserId}
-         GROUP BY cu.id
-         LIMIT 1
+            (SELECT COUNT(*) FROM user_profiles WHERE trainer_id = #{appUserId}) AS assignedMembers,
+            (SELECT COUNT(*) FROM crm_feedback_requests cfr
+               JOIN crm_users cu ON cu.id = cfr.trainer_id
+              WHERE cu.app_user_id = #{appUserId}
+                AND cfr.status IN ('pending','in_progress'))               AS pendingFeedback,
+            (SELECT COUNT(*) FROM crm_re_registration crr
+               JOIN crm_users cu ON cu.id = crr.assigned_to
+              WHERE cu.app_user_id = #{appUserId}
+                AND crr.status = 'pending')                                AS pendingReregistration
     </select>
 
     <resultMap id="assignedMemberMap" type="Member">
@@ -95,11 +103,9 @@
     <select id="findAssignedMembers" resultMap="assignedMemberMap">
         SELECT u.user_id AS id, up.name, up.contact AS phone, up.tier, up.member_type,
                CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'SUSPENDED' END AS status
-          FROM crm_member_assignments cma
-          JOIN crm_users cu ON cu.id = cma.trainer_id AND cu.app_user_id = #{appUserId}
-          JOIN users u       ON u.user_id = cma.member_id
-          JOIN user_profiles up ON up.user_id = cma.member_id
-         WHERE cma.gym_id = #{gymId}
+          FROM user_profiles up
+          JOIN users u ON u.user_id = up.user_id
+         WHERE up.trainer_id = #{appUserId}
          ORDER BY up.name ASC
     </select>
 

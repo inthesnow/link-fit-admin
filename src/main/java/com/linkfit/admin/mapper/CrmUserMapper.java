@@ -19,5 +19,19 @@ public interface CrmUserMapper {
             @Param("gymId")    Long gymId,
             @Param("username") String username);
 
+    // 트레이너 지정/해제 시 앱 계정과 연결된 CRM 로그인 계정을 찾기 위함 (중복 발급 방지)
+    Optional<CrmUser> findByAppUserId(@Param("appUserId") String appUserId);
+
     int insert(CrmUser user);
+
+    int updateSecondPassword(@Param("id") String id, @Param("secondPasswordHash") String secondPasswordHash);
+
+    int updateLockedCategories(@Param("id") String id, @Param("lockedCategories") String lockedCategories);
+
+    // 트레이너 재지정 시 기존(비활성화된) CRM 계정을 재활성화. gymId도 함께 최신화(트레이너 본인의
+    // user_gym 기준 — 최초 발급 이후 소속이 바뀌었을 가능성 대비)
+    int reactivateAsTrainer(@Param("id") String id, @Param("gymId") Long gymId);
+
+    // 트레이너 권한 회수 시 CRM 로그인 계정 비활성화 (계정 자체는 보존)
+    int deactivateByAppUserId(@Param("appUserId") String appUserId);
 }

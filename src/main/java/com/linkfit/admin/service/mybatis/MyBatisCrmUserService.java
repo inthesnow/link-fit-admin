@@ -25,4 +25,14 @@ public class MyBatisCrmUserService implements CrmUserService {
     public Optional<CrmUser> findById(String id) {
         return crmUserMapper.findById(id);
     }
+
+    @Override
+    public void updateSecondPassword(String id, String secondPasswordHash) {
+        crmUserMapper.updateSecondPassword(id, secondPasswordHash);
+    }
+
+    @Override
+    public void updateLockedCategories(String id, String lockedCategories) {
+        crmUserMapper.updateLockedCategories(id, lockedCategories);
+    }
 }

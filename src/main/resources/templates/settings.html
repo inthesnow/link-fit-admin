@@ -419,6 +419,39 @@
             </div>
         </div>
 
+        <!-- Security: second password / locked categories -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+                <span class="setting-card-title">보안 — 2차 비밀번호 (내 계정)</span>
+            </div>
+            <div class="setting-card-body">
+                <div class="field-row">
+                    <div class="field-group">
+                        <label class="field-label" for="curLoginPw">현재 로그인 비밀번호</label>
+                        <input type="password" class="field-input" id="curLoginPw" placeholder="본인 확인용">
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="newSecondPw">새 2차 비밀번호</label>
+                        <input type="password" class="field-input" id="newSecondPw" placeholder="잠긴 메뉴 진입 시 사용">
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px">
+                    <button class="btn btn-primary" style="font-size:12px" onclick="saveSecondPassword()">2차 비밀번호 설정/변경</button>
+                    <span id="secondPwStatus" style="font-size:12px;color:var(--text-muted)"></span>
+                </div>
+
+                <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+                    <div class="field-label" style="margin-bottom:10px">2차 비밀번호로 잠글 메뉴 선택</div>
+                    <div id="lockCategoryGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px"></div>
+                    <div style="margin-top:14px">
+                        <button class="btn btn-primary" style="font-size:12px" onclick="saveLockedCategories()">잠금 메뉴 저장</button>
+                        <span id="lockCategoryStatus" style="font-size:12px;color:var(--text-muted);margin-left:8px"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Holiday settings -->
         <div class="setting-card">
             <div class="setting-card-header">
@@ -818,12 +851,77 @@ async function deleteBanner(id) {
 }
 
 // ═══════════════════════════════════════════
+// 보안 — 2차 비밀번호 / 잠금 메뉴
+// ═══════════════════════════════════════════
+const LOCK_CATEGORY_LABELS = {
+    dashboard: '대시보드', members: '회원 관리', pt: '이용권 / PT',
+    reregistration: '재등록 관리', attendance: '루틴 출석', products: '상품 등록 관리',
+    feedback: '구독권/티켓 관리', consults: '상담 관리', inbox: '쪽지함',
+    cs: 'CS 관리', announcements: '알림 / 공지', staff: '트레이너 관리',
+    'crm-sales': '매출 관리', revenue: '통계 / 리포트', settings: '설정'
+};
+
+async function loadSecuritySettings() {
+    try {
+        const res  = await fetch('/api/auth/me');
+        const json = await res.json();
+        if (!json.success) return;
+        const data = json.data;
+        document.getElementById('secondPwStatus').textContent =
+            data.hasSecondPassword ? '설정됨' : '아직 설정되지 않음';
+        renderLockCategoryGrid(data.lockedCategories || []);
+    } catch (e) { console.error(e); }
+}
+
+function renderLockCategoryGrid(locked) {
+    const grid = document.getElementById('lockCategoryGrid');
+    grid.innerHTML = Object.keys(LOCK_CATEGORY_LABELS).map(key => `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);cursor:pointer">
+            <input type="checkbox" class="lock-cat-cb" value="${key}" ${locked.includes(key) ? 'checked' : ''}>
+            ${LOCK_CATEGORY_LABELS[key]}
+        </label>`).join('');
+}
+
+async function saveSecondPassword() {
+    const currentPassword   = document.getElementById('curLoginPw').value;
+    const newSecondPassword = document.getElementById('newSecondPw').value;
+    if (!currentPassword || !newSecondPassword) { alert('현재 비밀번호와 새 2차 비밀번호를 모두 입력해주세요.'); return; }
+    const res  = await fetch('/api/auth/second-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newSecondPassword })
+    });
+    const json = await res.json();
+    if (!json.success) { alert('설정 실패: ' + (json.message || '')); return; }
+    document.getElementById('curLoginPw').value = '';
+    document.getElementById('newSecondPw').value = '';
+    document.getElementById('secondPwStatus').textContent = '설정됨';
+    alert('2차 비밀번호가 저장되었습니다.');
+}
+
+async function saveLockedCategories() {
+    const lockedCategories = Array.from(document.querySelectorAll('.lock-cat-cb:checked')).map(cb => cb.value);
+    const res  = await fetch('/api/auth/security-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lockedCategories })
+    });
+    const json = await res.json();
+    const status = document.getElementById('lockCategoryStatus');
+    if (!json.success) { status.style.color = 'var(--error)'; status.textContent = '저장 실패: ' + (json.message || ''); return; }
+    status.style.color = 'var(--success)';
+    status.textContent = '저장되었습니다.';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+// ═══════════════════════════════════════════
 // Init
 // ═══════════════════════════════════════════
 document.getElementById('holidayYearLabel').textContent = holidayYear + '년';
 init();
 loadHolidays();
 loadBanners();
+loadSecuritySettings();
 </script>
 </body>
 </html>

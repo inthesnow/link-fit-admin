@@ -11,7 +11,9 @@ public class CrmUser {
     private String email;
     private String username;
     private String passwordHash;
+    private String secondPasswordHash;  // 2차 비밀번호 (카테고리 잠금 해제용, 로그인 비밀번호와 별도)
     private String role;         // super_admin | gym_admin | trainer
+    private String lockedCategories;    // 콤마 구분 카테고리 키, 예: "crm-sales,revenue"
     private boolean active;
     private LocalDateTime createdAt;
 
@@ -33,8 +35,19 @@ public class CrmUser {
     public void setUsername(String username) { this.username = username; }
     public String getPasswordHash() { return passwordHash; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public String getSecondPasswordHash() { return secondPasswordHash; }
+    public void setSecondPasswordHash(String secondPasswordHash) { this.secondPasswordHash = secondPasswordHash; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public String getLockedCategories() { return lockedCategories; }
+    public void setLockedCategories(String lockedCategories) { this.lockedCategories = lockedCategories; }
+
+    public java.util.Set<String> lockedCategorySet() {
+        if (lockedCategories == null || lockedCategories.isBlank()) return java.util.Set.of();
+        return java.util.Arrays.stream(lockedCategories.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toSet());
+    }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     public LocalDateTime getCreatedAt() { return createdAt; }

@@ -73,4 +73,22 @@ public class JwtUtil {
     public String getUsername(String token) {
         return parseClaims(token).get("username", String.class);
     }
+
+    // ── 카테고리 잠금 해제 토큰 (2차 비밀번호 검증 성공 시 발급, 10분 한도) ──
+    public static final String UNLOCK_COOKIE_NAME = "crm_unlock";
+    private static final long UNLOCK_TOKEN_TTL_MS = 10 * 60 * 1000L;
+
+    public String generateUnlockToken(String userId, String category) {
+        return Jwts.builder()
+                .subject(userId)
+                .claim("category", category)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + UNLOCK_TOKEN_TTL_MS))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    public String getUnlockCategory(String token) {
+        return parseClaims(token).get("category", String.class);
+    }
 }

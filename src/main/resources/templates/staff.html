@@ -432,20 +432,15 @@
                     <input type="text" class="form-input" id="sName" placeholder="홍길동">
                 </div>
                 <div class="form-group">
-                    <label class="form-label">전화번호</label>
-                    <input type="text" class="form-input" id="sPhone" placeholder="010-0000-0000">
+                    <label class="form-label">전화번호 *</label>
+                    <input type="text" class="form-input" id="sPhone" placeholder="010-0000-0000" oninput="this.value=formatPhoneAsTyped(this.value)">
                 </div>
-                <div class="form-group full">
+                <div class="form-group full" id="sEmailGroup" style="display:none">
                     <label class="form-label">이메일 <span style="color:var(--text-muted);font-size:11px">(로그인 ID)</span></label>
                     <input type="email" class="form-input" id="sEmail" placeholder="email@linkfit.com">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">역할</label>
-                    <select class="form-select" id="sRole">
-                        <option value="TRAINER">트레이너</option>
-                        <option value="ADMIN">일반 관리자</option>
-                        <option value="SUPER_ADMIN">슈퍼 관리자</option>
-                    </select>
+                <div class="form-group full" id="sRegisterHint">
+                    <span style="color:var(--text-muted);font-size:11px">이름과 전화번호로 이미 앱에 가입된 사용자를 찾아 트레이너로 지정합니다. 앱 회원가입이 먼저 되어 있어야 합니다.</span>
                 </div>
             </div>
         </div>
@@ -570,6 +565,20 @@ const roleBadge = { SUPER_ADMIN: 'badge-super', ADMIN: 'badge-admin', TRAINER: '
 function csrfHeaders(extra) {
     return Object.assign({ 'Content-Type': 'application/json' }, extra);
 }
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
+}
+// 입력 중 실시간으로 3-4-4 자리로 하이픈을 넣어준다.
+function formatPhoneAsTyped(v) {
+    const d = String(v || '').replace(/[^0-9]/g, '').slice(0, 11);
+    if (d.length <= 3) return d;
+    if (d.length <= 7) return d.replace(/(\d{3})(\d+)/, '$1-$2');
+    return d.replace(/(\d{3})(\d{4})(\d+)/, '$1-$2-$3');
+}
 
 function setRoleTab(role, btn) {
     currentRole = role;
@@ -600,7 +609,7 @@ function renderTable(staff, total) {
     tbody.innerHTML = staff.map(s => `
         <tr>
             <td>${s.name || '-'}</td>
-            <td>${s.phone || '-'}</td>
+            <td>${formatPhone(s.phone) || '-'}</td>
             <td>${s.email || '-'}</td>
             <td><span class="badge ${roleBadge[s.role] || 'badge-trainer'}">${roleLabel[s.role] || s.role}</span></td>
             <td style="color:var(--text-secondary)">${s.assignedMemberCount != null ? s.assignedMemberCount + '명' : '-'}</td>
@@ -609,7 +618,7 @@ function renderTable(staff, total) {
             <td style="display:flex;gap:6px">
                 <button class="btn btn-secondary" style="padding:4px 9px;font-size:12px" onclick="editStaff('${s.id}')">수정</button>
                 ${s.role === 'TRAINER' ? `<button class="btn btn-secondary" style="padding:4px 9px;font-size:12px;color:var(--accent)" onclick="openDashboard('${s.id}','${(s.name||'').replace(/'/g,'')}')">상세</button>` : ''}
-                <button class="btn btn-danger" style="padding:4px 9px;font-size:12px" onclick="deleteStaff('${s.id}', '${s.name}')">삭제</button>
+                <button class="btn btn-danger" style="padding:4px 9px;font-size:12px" onclick="deleteStaff('${s.id}', '${s.name}')">권한 회수</button>
             </td>
         </tr>
     `).join('');
@@ -634,7 +643,8 @@ function openModal() {
     editingId = null;
     document.getElementById('modalTitle').textContent = '트레이너 등록';
     ['sName','sPhone','sEmail'].forEach(fid => document.getElementById(fid).value = '');
-    document.getElementById('sRole').value = 'TRAINER';
+    document.getElementById('sEmailGroup').style.display = 'none';
+    document.getElementById('sRegisterHint').style.display = '';
     document.getElementById('staffModal').classList.add('open');
 }
 
@@ -645,36 +655,36 @@ async function editStaff(id) {
     const json = await res.json();
     const s = json.data;
     editingId = id;
-    document.getElementById('modalTitle').textContent = '직원 수정';
+    document.getElementById('modalTitle').textContent = '트레이너 정보 수정';
     document.getElementById('sName').value = s.name || '';
-    document.getElementById('sPhone').value = s.phone || '';
+    document.getElementById('sPhone').value = formatPhone(s.phone) || '';
     document.getElementById('sEmail').value = s.email || '';
-    document.getElementById('sRole').value = s.role || 'TRAINER';
+    document.getElementById('sEmailGroup').style.display = '';
+    document.getElementById('sRegisterHint').style.display = 'none';
     document.getElementById('staffModal').classList.add('open');
 }
 
 async function saveStaff() {
     const name = document.getElementById('sName').value.trim();
-    if (!name) { alert('이름을 입력해주세요.'); return; }
+    const phone = document.getElementById('sPhone').value.trim();
+    if (!name || !phone) { alert('이름과 전화번호를 입력해주세요.'); return; }
 
-    const body = {
-        name,
-        phone: document.getElementById('sPhone').value,
-        email: document.getElementById('sEmail').value,
-        role:  document.getElementById('sRole').value,
-    };
+    const body = editingId
+        ? { name, phone, email: document.getElementById('sEmail').value }
+        : { name, phone };
     const url    = editingId ? `/api/staff/${editingId}` : '/api/staff';
     const method = editingId ? 'PUT' : 'POST';
     const res = await fetch(url, { method, headers: csrfHeaders(), body: JSON.stringify(body) });
-    if (!res.ok) { alert('저장에 실패했습니다.'); return; }
+    const json = await res.json();
+    if (!res.ok || (json && json.success === false)) { alert((json && json.message) || '저장에 실패했습니다.'); return; }
     closeModal();
     loadStaff();
 }
 
 async function deleteStaff(id, name) {
-    if (!confirm(`${name} 직원을 삭제하시겠습니까?`)) return;
+    if (!confirm(`${name} 님의 트레이너 권한을 회수하시겠습니까?\n(앱 회원 계정과 운동 이력은 그대로 유지되고, 관리자 페이지 로그인만 막힙니다)`)) return;
     const res = await fetch(`/api/staff/${id}`, { method: 'DELETE', headers: csrfHeaders() });
-    if (!res.ok) { alert('삭제에 실패했습니다.'); return; }
+    if (!res.ok) { alert('처리에 실패했습니다.'); return; }
     loadStaff();
 }
 
@@ -803,21 +813,34 @@ function makeDonut(id, pct, color) {
 async function loadSideStats() {
     try {
         const today = new Date().toISOString().slice(0,10);
-        const res   = await fetch(`/api/dashboard/attendance?date=${today}&period=monthly`);
-        const { data } = await res.json();
-        const rp = data.routineRate || 68;
-        const ap = data.attendanceRate || 70;
+        const [attendRes, memberRes, routineRes] = await Promise.all([
+            fetch(`/api/dashboard/attendance?date=${today}&period=daily`),
+            fetch(`/api/members?status=ACTIVE&page=0&size=1`),
+            fetch(`/api/dashboard/routine-compliance?days=30`)
+        ]);
+        const { data: attendData } = await attendRes.json();
+        const { data: memberData } = await memberRes.json();
+        const { data: routineData } = await routineRes.json();
+
+        const attended     = attendData?.total || 0;
+        const totalMembers = memberData?.total || 0;
+        const ap = totalMembers > 0 ? Math.round(attended / totalMembers * 100) : 0;
+
+        const assigned  = routineData?.assigned || 0;
+        const completed = routineData?.completed || 0;
+        const rp = assigned > 0 ? Math.round(completed / assigned * 100) : 0;
+
         document.getElementById('pctRoutine').textContent = rp + '%';
         document.getElementById('descRoutine').textContent = `루틴 이행 ${rp}%`;
         makeDonut('donutRoutine', rp, '#F59E0B');
         document.getElementById('pctAttend').textContent = ap + '%';
-        document.getElementById('descAttend').textContent = `출석 ${data.total || 0}명`;
+        document.getElementById('descAttend').textContent = `출석 ${attended}명`;
         makeDonut('donutAttend', ap, '#10B981');
     } catch(e) {
-        makeDonut('donutRoutine', 68, '#F59E0B');
-        makeDonut('donutAttend', 70, '#10B981');
-        document.getElementById('pctRoutine').textContent = '68%';
-        document.getElementById('pctAttend').textContent = '70%';
+        makeDonut('donutRoutine', 0, '#F59E0B');
+        makeDonut('donutAttend', 0, '#10B981');
+        document.getElementById('pctRoutine').textContent = '-';
+        document.getElementById('pctAttend').textContent = '-';
     }
 }
 
@@ -901,7 +924,7 @@ async function openAttendeeModal(classId, title) {
         </tr></thead>
         <tbody>${list.map(a => `<tr>
             <td style="padding:6px 8px">${a.memberName || '-'}</td>
-            <td style="padding:6px 8px">${a.phone || '-'}</td>
+            <td style="padding:6px 8px">${formatPhone(a.phone) || '-'}</td>
             <td style="padding:6px 8px">${a.gender || '-'}</td>
             <td style="padding:6px 8px">${(a.registeredAt||'').replace('T',' ').substring(0,16)}</td>
             <td style="padding:6px 8px">${a.attended ? '<span style="color:var(--success)">✓</span>' : '-'}</td>
@@ -1118,7 +1141,7 @@ async function openDashboard(id, name) {
         ${mList.map(m => `
             <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
                 <span>${m.name || '-'}</span>
-                <span style="color:var(--text-muted)">${m.phone || ''}</span>
+                <span style="color:var(--text-muted)">${formatPhone(m.phone) || ''}</span>
                 <span class="badge badge-pending" style="font-size:11px">${tierLabel[m.tier] || m.tier || '-'}</span>
             </div>`).join('')}
         </div>`;
@@ -1127,6 +1150,40 @@ async function openDashboard(id, name) {
 function closeDashboardModal() {
     document.getElementById('trainerDashboardModal').classList.remove('open');
     dashboardTrainerId = null;
+    document.getElementById('assignMemberSearch').value = '';
+    document.getElementById('assignMemberResults').innerHTML = '';
+}
+
+// ── 회원 배정 (담당 트레이너 지정) ─────────────────────────────
+async function searchAssignMembers() {
+    const keyword = document.getElementById('assignMemberSearch').value.trim();
+    const results = document.getElementById('assignMemberResults');
+    if (!keyword) { results.innerHTML = ''; return; }
+    results.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">검색 중...</div>';
+    const res  = await fetch(`/api/members?keyword=${encodeURIComponent(keyword)}&page=0&size=20`);
+    const json = await res.json();
+    const list = json.data?.members || [];
+    if (!list.length) {
+        results.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">검색 결과가 없습니다.</div>';
+        return;
+    }
+    results.innerHTML = list.map(m => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>${m.name || m.id} <span style="color:var(--text-muted);font-size:12px">${formatPhone(m.phone) || ''}</span></span>
+            <button class="btn btn-secondary" style="padding:3px 9px;font-size:11px" onclick="assignMemberToTrainer('${m.id}','${(m.name||m.id).replace(/'/g,'')}')">배정</button>
+        </div>`).join('');
+}
+
+async function assignMemberToTrainer(memberId, memberName) {
+    if (!confirm(`${memberName} 회원을 이 트레이너에게 배정하시겠습니까?`)) return;
+    const res = await fetch(`/api/members/${memberId}/assigned-trainer`, {
+        method: 'PATCH', headers: csrfHeaders(), body: JSON.stringify({ trainerId: dashboardTrainerId })
+    });
+    if (!res.ok) { alert('배정에 실패했습니다.'); return; }
+    document.getElementById('assignMemberSearch').value = '';
+    document.getElementById('assignMemberResults').innerHTML = '';
+    const name = document.getElementById('dbTitle').textContent.replace(' — CRM 대시보드', '');
+    openDashboard(dashboardTrainerId, name);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1309,6 +1366,15 @@ async function deleteHistRecord(id) {
         <div class="modal-body">
             <div id="dbStats"></div>
             <div id="dbMembers"></div>
+            <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+                <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">회원 배정</div>
+                <div style="display:flex;gap:6px">
+                    <input type="text" class="form-input" id="assignMemberSearch" placeholder="회원 이름/전화번호 검색"
+                           onkeyup="if(event.key==='Enter')searchAssignMembers()" style="flex:1">
+                    <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="searchAssignMembers()">검색</button>
+                </div>
+                <div id="assignMemberResults" style="margin-top:8px;max-height:160px;overflow-y:auto"></div>
+            </div>
         </div>
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeDashboardModal()">닫기</button>
