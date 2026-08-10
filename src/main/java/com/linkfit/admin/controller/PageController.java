@@ -24,6 +24,9 @@ public class PageController {
     @GetMapping("/feedback")
     public String feedback() { return "feedback"; }
 
+    @GetMapping("/lockers")
+    public String lockers() { return "lockers"; }
+
     @GetMapping("/reregistration")
     public String reregistration() { return "reregistration"; }
 

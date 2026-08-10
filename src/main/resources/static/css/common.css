@@ -359,6 +359,7 @@ body {
 }
 
 .filter-select:focus { border-color: var(--accent); }
+.filter-select { flex-shrink: 0; }
 
 /* ── Table controls ───────────────────────────────────── */
 .table-controls {
@@ -433,6 +434,37 @@ tbody td:first-child { color: var(--text-primary); font-weight: 500; }
 .badge-open      { background: #EFF6FF; color: #2563EB; }
 .badge-cancelled { background: #FEF2F2; color: #DC2626; }
 .badge-hold      { background: #F5F3FF; color: #7C3AED; }
+
+/* ── Locker grid ──────────────────────────────────────── */
+.locker-grid {
+    display: grid;
+    gap: 10px;
+    padding: 20px 24px;
+}
+
+.locker-cell {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 8px;
+    min-height: 76px;
+    cursor: pointer;
+    background: var(--surface);
+    display: flex; flex-direction: column; gap: 3px;
+    transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.locker-cell:hover { box-shadow: 0 0 0 2px var(--accent) inset; }
+
+.locker-cell .locker-num {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+}
+
+.locker-cell.empty { background: var(--surface-up); }
+.locker-cell.empty .locker-num { color: var(--text-muted); }
+
+.locker-cell.occupied { background: #EFF6FF; border-color: #BFDBFE; }
+.locker-cell.occupied .locker-name { font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.locker-cell.occupied .locker-period { font-size: 10px; color: var(--text-muted); }
 
 /* ── Pagination ───────────────────────────────────────── */
 .pagination {

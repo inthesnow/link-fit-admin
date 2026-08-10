@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.linkfit.admin.mapper.LockerMapper">
+
+    <select id="findZones" resultType="LockerZone">
+        SELECT id, gym_id AS gymId, name, rows_count AS rowsCount, cols_count AS colsCount,
+               total_count AS totalCount, display_order AS displayOrder
+        FROM locker_zone
+        WHERE gym_id = #{gymId}
+        ORDER BY display_order ASC, id ASC
+    </select>
+
+    <select id="findZoneById" resultType="LockerZone">
+        SELECT id, gym_id AS gymId, name, rows_count AS rowsCount, cols_count AS colsCount,
+               total_count AS totalCount, display_order AS displayOrder
+        FROM locker_zone
+        WHERE id = #{id}
+    </select>
+
+    <insert id="insertZone" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO locker_zone (gym_id, name, rows_count, cols_count, total_count, display_order)
+        VALUES (#{gymId}, #{name}, #{rowsCount}, #{colsCount}, #{totalCount}, #{displayOrder})
+    </insert>
+
+    <update id="updateZone">
+        UPDATE locker_zone
+        SET name = #{name}, rows_count = #{rowsCount}, cols_count = #{colsCount}, total_count = #{totalCount}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteZone">
+        DELETE FROM locker_zone WHERE id = #{id}
+    </delete>
+
+    <select id="countLockersInZone" resultType="int">
+        SELECT COUNT(*) FROM locker WHERE zone_id = #{zoneId}
+    </select>
+
+    <select id="countOccupiedInZone" resultType="int">
+        SELECT COUNT(*) FROM locker l
+        WHERE l.zone_id = #{zoneId}
+          AND EXISTS (
+              SELECT 1 FROM membership m
+              WHERE m.locker_id = l.id AND m.type = 'LOCKER' AND m.status IS NULL
+          )
+    </select>
+
+    <insert id="insertLocker">
+        INSERT INTO locker (zone_id, locker_number) VALUES (#{zoneId}, #{lockerNumber})
+    </insert>
+
+    <!-- 라커별 현재 배정(만료 여부 무관, status IS NULL인 최신 LOCKER membership 1건)을 조인.
+         해제는 별도 API 없이 기존 DELETE /api/memberships/{id}를 그대로 사용하므로
+         "배정 중" 여부는 순수하게 membership.locker_id 매칭 여부로만 판단한다.
+         gymId는 locker_zone과 조인해서 채운다(소속 헬스장 검증용, locker 테이블 자체엔 없음). -->
+    <sql id="lockerSelect">
+        SELECT l.id, l.zone_id AS zoneId, l.locker_number AS lockerNumber, lz.gym_id AS gymId,
+               m.id AS membershipId, m.user_id AS memberId, up.name AS memberName,
+               m.start_date AS startDate, m.end_date AS endDate
+        FROM locker l
+        JOIN locker_zone lz ON lz.id = l.zone_id
+        LEFT JOIN membership m
+               ON m.id = (SELECT MAX(m2.id) FROM membership m2
+                          WHERE m2.locker_id = l.id AND m2.type = 'LOCKER' AND m2.status IS NULL)
+        LEFT JOIN user_profiles up ON up.user_id = m.user_id
+    </sql>
+
+    <select id="findAllByZone" resultType="Locker">
+        <include refid="lockerSelect"/>
+        WHERE l.zone_id = #{zoneId}
+        ORDER BY l.locker_number ASC
+    </select>
+
+    <select id="findById" resultType="Locker">
+        <include refid="lockerSelect"/>
+        WHERE l.id = #{id}
+    </select>
+
+</mapper>
