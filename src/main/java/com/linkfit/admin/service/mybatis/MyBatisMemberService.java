@@ -143,15 +143,16 @@ public class MyBatisMemberService implements MemberService {
         return memberMapper.findMembershipsByMemberId(id);
     }
 
-    // unlimited: 실제 기간이 지정되지 않아 임시로 무기한 처리된 구성인지 여부.
-    // PT처럼 애초에 기간 개념이 없는 구성, 혹은 개월/일을 0으로 남겨둔 구성이 여기 해당하며,
-    // 대표(anchor) 선정 시 실제 기간이 있는 구성보다 우선순위가 낮아야 한다.
+    // unlimited: PT처럼 애초에 기간 개념이 없어 무기한 처리되는 구성인지 여부.
+    // 이용권/락커/운동복은 개월/일을 0으로 남겨두면(입력을 빠뜨린 경우 포함) 무기한이 아니라
+    // 그대로 0일(=시작일에 즉시 만료)로 계산한다 — 예전엔 0/0을 무기한(약 10년)으로 처리해서
+    // 기간 입력을 빠뜨린 실수가 수년짜리 이용권으로 조용히 등록되는 문제가 있었음.
+    // 대표(anchor) 선정 시 무기한(PT) 구성은 실제 기간이 있는 구성보다 우선순위가 낮아야 한다.
     private record ProductComponent(String type, java.time.LocalDate endDate, boolean unlimited) {}
 
     private static ProductComponent buildComponent(String type, java.time.LocalDate start, Integer months, Integer days) {
         int m = months != null ? months : 0;
         int d = days != null ? days : 0;
-        if (m == 0 && d == 0) return new ProductComponent(type, start.plusDays(DEFAULT_UNLIMITED_DURATION_DAYS), true);
         return new ProductComponent(type, start.plusMonths(m).plusDays(d), false);
     }
 

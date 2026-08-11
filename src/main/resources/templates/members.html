@@ -996,6 +996,15 @@ async function grantIndividualProduct() {
     } else {
         body.durationMonths = parseInt(document.getElementById('indivMonths').value) || 0;
         body.durationDays   = parseInt(document.getElementById('indivDays').value) || 0;
+        // 개월/일이 모두 0이면 기간 0일(등록 즉시 만료)로 등록된다 — 기간 입력을
+        // 빠뜨린 실수로 그렇게 등록되는 것을 막기 위해 확인받는다.
+        if (body.durationMonths === 0 && body.durationDays === 0) {
+            const ok = confirm(
+                '개월/일이 모두 0이면 기간 0일(등록 즉시 만료)로 등록됩니다.\n' +
+                '기간을 입력하지 않은 실수라면 취소 후 개월/일을 입력해주세요.\n\n계속 진행하시겠습니까?'
+            );
+            if (!ok) return;
+        }
     }
 
     const res  = await fetch(`/api/members/${detailMemberId}/memberships`, {
