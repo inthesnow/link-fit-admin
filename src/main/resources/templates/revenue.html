@@ -166,11 +166,6 @@
                         <div class="donut-desc-label" id="descAttend">이달 출석</div>
                     </div>
                     <div class="donut-card">
-                        <div class="donut-card-title">피드백 사용률</div>
-                        <div class="donut-canvas-wrap"><canvas id="donutFeedback"></canvas><div class="donut-center-label"><div class="donut-pct-label" id="pctFeedback">-</div></div></div>
-                        <div class="donut-desc-label" id="descFeedback">사용 / 발급</div>
-                    </div>
-                    <div class="donut-card">
                         <div class="donut-card-title">PT 가입률</div>
                         <div class="donut-canvas-wrap"><canvas id="donutPT"></canvas><div class="donut-center-label"><div class="donut-pct-label" id="pctPT">-</div></div></div>
                         <div class="donut-desc-label" id="descPT">PT / 전체</div>
@@ -382,19 +377,6 @@ async function loadAttendStats() {
         document.getElementById('pctAttend').textContent = '-';
         document.getElementById('pctRoutine').textContent = '-';
     }
-}
-
-async function loadFeedbackStats() {
-    try {
-        const ym = fmt(new Date()).slice(0,7);
-        const res = await fetch(`/api/feedback/tickets/summary?monthYear=${ym}`);
-        if (!res.ok) throw new Error();
-        const { data } = await res.json();
-        const pct = data.issued > 0 ? Math.round(data.used/data.issued*100) : 0;
-        document.getElementById('pctFeedback').textContent = pct + '%';
-        document.getElementById('descFeedback').textContent = `${data.used||0} / ${data.issued||0}회`;
-        makeDonut('donutFeedback', pct, '#EF4444');
-    } catch(e) { makeDonut('donutFeedback', 0, '#EF4444'); document.getElementById('pctFeedback').textContent='-'; }
 }
 
 let revenueBarChart = null;
@@ -707,7 +689,6 @@ document.getElementById('ticketEnd').value   = fmt(today);
 loadSummary();
 loadMemberStats();
 loadAttendStats();
-loadFeedbackStats();
 loadMonthlyRevenue();
 loadMemberTrend();
 </script>
