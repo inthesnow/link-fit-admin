@@ -80,9 +80,8 @@ public class AuthApiController {
             return ApiResponse.error("비밀번호가 올바르지 않습니다.");
         }
 
-        if (!user.isActive()) {
-            return ApiResponse.error("비활성화된 계정입니다.");
-        }
+        // findByBranchCodeAndUsername가 이미 is_active=1로 필터링하므로 여기선 항상 true —
+        // 비활성 계정은 이 시점까지 도달하지 않는다 (2026-08-15: 도달 불가능한 분기 정리).
 
         String token = jwtUtil.generateToken(
                 user.getId(), user.getBranchCode(), user.getUsername(),
