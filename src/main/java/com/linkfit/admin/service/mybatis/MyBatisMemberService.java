@@ -314,10 +314,20 @@ public class MyBatisMemberService implements MemberService {
     }
 
     @Override
+    @Transactional
     public void chargeTicket(String id, String ticketType, int amount, String description) {
+        int before = Optional.ofNullable(memberMapper.findTicketRemaining(id, ticketType)).orElse(0);
         memberMapper.upsertTicket(id, ticketType, amount);
+        int after = Optional.ofNullable(memberMapper.findTicketRemaining(id, ticketType)).orElse(0);
+        int actualDelta = after - before;
+
         String actionType = amount >= 0 ? "CHARGE" : "USE";
         String desc = (description != null && !description.isBlank()) ? description : (amount >= 0 ? "관리자 지급" : "관리자 차감");
+        // 잔액 부족으로 요청한 만큼 전부 차감되지 못하고 0에서 멈춘 경우, 로그에 실제 적용된
+        // 변동폭을 남긴다 (ticket_logs에는 amount 컬럼이 없어 description으로만 남길 수 있음).
+        if (actualDelta != amount) {
+            desc = desc + String.format(" (요청 %+d 중 실제 %+d 적용, 잔액부족)", amount, actualDelta);
+        }
         memberMapper.insertTicketLog(id, ticketType, actionType, desc);
     }
 
@@ -415,5 +425,48 @@ public class MyBatisMemberService implements MemberService {
             memberMapper.adjustServicePtSessions(sourceMemberId, -service);
             memberMapper.adjustServicePtSessions(targetMemberId, service);
         }
+    }
+
+    @Override
+    @Transactional
+    public void deleteMembership(Long id) {
+        Membership target = memberMapper.findMembershipById(id).orElse(null);
+        if (target != null && target.getPackageId() != null) {
+            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId()).stream()
+                    .filter(m -> target.getPackageId().equals(m.getPackageId()) && !m.getId().equals(id))
+                    .toList();
+            boolean holdsAmount = target.getPrice() > 0 || target.getDiscountAmount() > 0 || target.getPaidAmount() > 0;
+            if (holdsAmount && !siblings.isEmpty()) {
+                // 이 구성이 금액을 들고 있었다면, 남은 구성 중 만료일이 가장 먼 것에 금액을 이전해
+                // 개별 구성 회수만으로 전체 금액/미납금 표시가 사라지지 않게 한다.
+                // PT는 기간 없이 무기한(가짜 만료일)으로 생성되므로, 실제 기간이 있는 구성이
+                // 남아있다면 그쪽을 우선하고 PT만 남았을 때만 PT로 이전한다.
+                Membership newHolder = siblings.stream()
+                        .filter(m -> !"PT".equals(m.getType()))
+                        .max(Comparator.comparing(Membership::getEndDate))
+                        .orElseGet(() -> siblings.stream()
+                                .max(Comparator.comparing(Membership::getEndDate))
+                                .orElse(siblings.get(0)));
+                memberMapper.updateMembershipAmounts(newHolder.getId(),
+                        target.getPrice(), target.getDiscountAmount(), target.getPaidAmount(),
+                        target.getPaymentMethod(), target.getRegType());
+            }
+        }
+        // PT 구성을 회수하면 등록 시 충전했던 실제 PT 잔여 세션도 그만큼 되돌린다
+        // (이미 사용한 세션이 있으면 0 밑으로는 안 내려가고 거기서 멈춘다).
+        if (target != null && "PT".equals(target.getType()) && target.getSessionCount() != null && target.getSessionCount() != 0) {
+            memberMapper.adjustPtSessions(target.getMemberId(), -target.getSessionCount());
+        }
+        memberMapper.deleteMembership(id);
+    }
+
+    @Override
+    @Transactional
+    public void deleteMembershipsByPackage(String memberId, Long packageId) {
+        memberMapper.findMembershipsByMemberId(memberId).stream()
+                .filter(m -> packageId.equals(m.getPackageId()) && "PT".equals(m.getType())
+                        && m.getSessionCount() != null && m.getSessionCount() != 0)
+                .forEach(m -> memberMapper.adjustPtSessions(memberId, -m.getSessionCount()));
+        memberMapper.deleteMembershipsByMemberAndPackage(memberId, packageId);
     }
 }

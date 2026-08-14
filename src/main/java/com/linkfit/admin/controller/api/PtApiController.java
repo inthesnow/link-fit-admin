@@ -50,7 +50,11 @@ public class PtApiController {
                                              @RequestBody Map<String, Object> body) {
         log.info("[Pt] PUT /api/pt/members/{memberId}/sessions - memberId={}, body={}", memberId, body);
         String target = (String) body.get("target");
-        int delta = ((Number) body.get("delta")).intValue();
+        Object rawDelta = body.get("delta");
+        if (!(rawDelta instanceof Number)) {
+            return ApiResponse.error("delta는 숫자여야 합니다.");
+        }
+        int delta = ((Number) rawDelta).intValue();
         if (delta == 0) {
             return ApiResponse.error("조정할 횟수를 입력해주세요.");
         }

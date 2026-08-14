@@ -89,17 +89,19 @@ public class RevenueApiController {
         if (sale == null) {
             return ApiResponse.error("결제 내역을 찾을 수 없습니다.");
         }
-        if (sale.getRefundedAt() != null) {
-            return ApiResponse.error("이미 환불 처리된 내역입니다.");
-        }
         int remaining = sale.getAmount() - sale.getRefundAmount();
+        if (remaining <= 0) {
+            return ApiResponse.error("이미 전액 환불 처리된 내역입니다.");
+        }
         Object rawAmount = body == null ? null : body.get("amount");
-        int refundAmount = rawAmount == null ? remaining : ((Number) rawAmount).intValue();
-        if (refundAmount <= 0 || refundAmount > remaining) {
+        int refundIncrement = rawAmount == null ? remaining : ((Number) rawAmount).intValue();
+        if (refundIncrement <= 0 || refundIncrement > remaining) {
             return ApiResponse.error("환불 금액은 1원 이상 " + remaining + "원 이하여야 합니다.");
         }
         String reason = body == null || body.get("reason") == null ? null : body.get("reason").toString().trim();
-        saleMapper.refund(id, refundAmount, (reason == null || reason.isEmpty()) ? null : reason);
+        // refund_amount는 누적 환불액 — 이전에 이미 부분 환불된 금액에 이번 환불분을 더해서 저장한다.
+        int newTotalRefundAmount = sale.getRefundAmount() + refundIncrement;
+        saleMapper.refund(id, newTotalRefundAmount, (reason == null || reason.isEmpty()) ? null : reason);
         return ApiResponse.ok();
     }
 

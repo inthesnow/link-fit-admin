@@ -37,4 +37,9 @@ public interface MemberService {
     void transferMembership(Long membershipId, String targetMemberId, Long gymId);
     // PT는 특정 구매건이 아니라 회원 전체 PT 잔여 풀(구매+서비스)을 그대로 이전한다.
     void transferPtSessions(String sourceMemberId, String targetMemberId, Long gymId);
+
+    // 이용권/락커/운동복 회수. 금액 이전 + PT 세션 환원 + 삭제가 한 트랜잭션으로 묶여야
+    // 중간에 실패해도 금액이 중복되거나 유실되지 않는다.
+    void deleteMembership(Long id);
+    void deleteMembershipsByPackage(String memberId, Long packageId);
 }

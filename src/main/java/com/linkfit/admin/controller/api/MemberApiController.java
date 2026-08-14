@@ -191,7 +191,11 @@ public class MemberApiController {
     public ApiResponse<Void> chargeTicket(@PathVariable String id, @RequestBody Map<String, Object> body) {
         log.info("[Member] POST /api/members/{id}/tickets/charge - id={}", id);
         String ticketType  = (String) body.get("ticketType");
-        int amount         = (Integer) body.get("amount");
+        Object rawAmount   = body.get("amount");
+        if (!(rawAmount instanceof Number)) {
+            return ApiResponse.error("amount는 숫자여야 합니다.");
+        }
+        int amount          = ((Number) rawAmount).intValue();
         String description = (String) body.get("description");
         memberService.chargeTicket(id, ticketType, amount, description);
         return ApiResponse.ok();
