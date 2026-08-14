@@ -219,11 +219,27 @@ JWT에 `role`(super_admin/gym_admin/trainer) 클레임이 있고 `ROLE_xxx` Gran
 
 ### 3. 지점(gym) 스코핑이 일부 컨트롤러에서만 적용됨
 `Crm*Mapper` 계열(2026-06-08 이후 작성분)은 쿼리에 `gym_id` 필터가 있지만, `MemberApiController`/
-`StaffApiController`/`RevenueApiController`/`SettingApiController` 등 기존 컨트롤러는 `gymId` 파라미터 자체가
+`RevenueApiController`/`SettingApiController` 등 기존 컨트롤러는 `gymId` 파라미터 자체가
 없어 전체 지점 데이터를 필터 없이 조회한다. 현재 지점이 `LF01` 1개뿐이라 실사용 영향은 없지만,
 2번째 지점이 생기면 지점 간 데이터가 섞인다.
 **2026-07-21에 `docs/multi-branch-expansion-issues.md`로 전수 재검증함 — 2번째 지점 추가 전 필독.**
 (테스트용으로 `docs/sql/gym_lf02_seed_20260726.sql`에 LF02 시드 데이터가 있음.)
+
+**2026-08-15에 이 카테고리로 발견/수정한 것들** (gymId를 받으면서 실제 쿼리에서 안 쓰거나, by-id
+엔드포인트에 gym_id 필터가 아예 없던 경우):
+- `StaffApiController` 대시보드/담당회원 — gymId 파라미터는 받으면서 SQL에서 실제로 안 씀(체크하는
+  척만 하고 있었음) → `StaffMapper.xml`에 `user_gym` 조인 추가
+- CRM 받은메시지함/공지사항 by-id 조회·수정·삭제(`CrmMessageMapper`, `CrmAnnouncementMapper`) —
+  list 쿼리는 gym_id로 필터링하면서 by-id 쿼리엔 없었음(다른 지점 UUID를 알면 읽기/수정/삭제 가능)
+- 공지·이벤트 일괄발송 대상 조회(`ConversationMapper.findMemberTargets/findTrainerTargets/countTarget`) —
+  지점 구분 없이 전체 회원/트레이너 대상이었음. 이건 read-leak이 아니라 **쓰기 경로**라 더 심각 —
+  다른 지점 관리자가 공지를 보내면 전체 지점에 뿌려짐
+
+**여전히 미해결 (스키마 자체에 gym_id가 없어서, 임의로 스키마를 바꾸지 않고 보류)**:
+`gym_setting`(단일 행, PK가 `tinyint` 기본값 1로 하드코딩됨)/`gym_holiday`/`gym_banner` — gym_id
+컬럼 자체가 없어 2번째 지점이 생기면 운영시간/공지/휴무일/배너가 전 지점에서 공유된다. 이건 WHERE절
+하나 빠뜨린 수준이 아니라 스키마 설계부터 다시 해야 하는 문제라, 2번째 지점 추가 계획이 구체화될 때
+`docs/multi-branch-expansion-issues.md`와 함께 별도로 다룰 것.
 
 ### 3-1. 트레이너 지정 방식이 두 갈래로 나뉘어 있음
 `user_profiles.trainer_id`(정상 동작)와 `crm_member_assignments`(중복 시스템, 죽은 코드에 가까움 + 실사용 시
@@ -256,7 +272,13 @@ CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 �
 **백엔드**
 - `ApiResponse<T>` 공통 응답 포맷, `GlobalExceptionHandler`(404/500)
 - REST API Controller 20개, 도메인 클래스 33개, MyBatis Mapper 인터페이스+XML 28개
-- `DailyStatsScheduler` — 일별 통계 집계(01:00) / 티켓 만료(00:05) / 재등록 자동분류(06:00) — 로컬은 2026-07-15부터 정상 동작 예상 (운영은 아직 실패)
+- `DailyStatsScheduler` — 일별 통계 집계(01:00) / 재등록 자동분류(06:00) — 로컬은 2026-07-15부터 정상 동작 예상 (운영은 아직 실패)
+  **주의(2026-08-14 정정)**: "티켓 만료(00:05)"는 실제로 구현된 적이 없는 항목이었음(잘못된 문서 기록).
+  `member_tickets` 테이블 자체에 만료일 컬럼이 없어(`remaining` 잔량만 존재) 시간 기준 자동 만료를
+  걸 데이터가 없다. 무료 피드백 티켓의 월별 리셋은 lof-backend `TicketResetScheduler`가 별도로
+  처리하는 것과는 다른 개념 — 그쪽은 "매달 초기화"고 여기서 말하던 건 "구매 후 N일 경과 만료"인데
+  후자는 스키마부터 없다. 실제로 티켓 만료 기능이 필요하면 만료일 컬럼 추가부터 하는 스키마 설계가
+  먼저 필요 — 임의로 만료 정책(기간 등)을 정해 구현하지 말 것.
 
 **프론트엔드 — 최근 전면 개편분 (2026-06 커밋 기준)**
 - 메시지 시스템 — `message_conversation`+`chat_message` 기반 재설계 완료 (레거시 `message`/`message_recipient`는 미사용)
@@ -287,6 +309,16 @@ CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 �
 - **구독권/티켓 관리 — 사용내역 탭** — `ticket_logs`(그동안 기록만 되고 조회 화면이 없었음) 조회 UI,
   사진/영상 피드백권도 관리 대상에 포함
 - **연락처 정규화** — 저장은 항상 숫자만, 화면 표시할 때만 3-4-4 하이픈 부여
+
+**데이터 정합성/보안 수정 (2026-08-15, 전수 점검)**
+- **환불** — 부분 환불 후 추가 환불이 영구 차단되던 버그 + `refund_amount`를 누적이 아니라 매번
+  덮어써서 이전 부분환불액이 유실되던 버그 함께 수정 (`RevenueApiController`)
+- **회원권 삭제** — 금액 이전 + PT 세션 환원 + 삭제가 트랜잭션으로 묶여있지 않아 중간 실패 시
+  데이터가 어긋날 수 있었음 → `MemberService.deleteMembership`로 이동, `@Transactional` 적용
+- **티켓 충전/차감** — 트랜잭션 미적용 + 잔액 부족으로 clamp된 경우 로그가 실제 변동폭을 반영하지
+  못하던 문제 수정 (`MyBatisMemberService.chargeTicket`)
+- **소유권/지점 스코핑** — 위 "알려진 이슈 3번"의 2026-08-15 항목 참고
+- JSON 숫자 필드 언가드 캐스팅(잘못된 타입 전송 시 500) 방어 코드 추가
 
 **인프라**
 - `application-dev.yml` / `application-prod.yml` 환경 분리, prod는 환경변수 기반
