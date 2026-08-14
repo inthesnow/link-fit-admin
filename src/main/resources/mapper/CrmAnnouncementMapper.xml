@@ -39,7 +39,7 @@
 
     <select id="findById" resultMap="annoMap">
         <include refid="annoJoin"/>
-         WHERE a.id = #{id} LIMIT 1
+         WHERE a.id = #{id} AND a.gym_id = #{gymId} LIMIT 1
     </select>
 
     <insert id="insert" parameterType="com.linkfit.admin.domain.CrmAnnouncement">
@@ -50,11 +50,11 @@
     </insert>
 
     <update id="markSent">
-        UPDATE crm_announcements SET sent_at = NOW() WHERE id = #{id}
+        UPDATE crm_announcements SET sent_at = NOW() WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <delete id="delete">
-        DELETE FROM crm_announcements WHERE id = #{id}
+        DELETE FROM crm_announcements WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
 </mapper>

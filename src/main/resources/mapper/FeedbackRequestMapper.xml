@@ -57,7 +57,7 @@
 
     <select id="findById" resultMap="requestMap">
         <include refid="requestJoin"/>
-         WHERE r.id = #{id} LIMIT 1
+         WHERE r.id = #{id} AND r.gym_id = #{gymId} LIMIT 1
     </select>
 
     <insert id="insert" parameterType="com.linkfit.admin.domain.FeedbackRequest">
@@ -71,7 +71,7 @@
         UPDATE crm_feedback_requests
            SET trainer_id = #{trainerId},
                status     = CASE WHEN status = 'pending' THEN 'in_progress' ELSE status END
-         WHERE id = #{id}
+         WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="respond">
@@ -79,11 +79,11 @@
            SET response     = #{response},
                responded_at = NOW(),
                status       = 'completed'
-         WHERE id = #{id}
+         WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="updateStatus">
-        UPDATE crm_feedback_requests SET status = #{status} WHERE id = #{id}
+        UPDATE crm_feedback_requests SET status = #{status} WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
 </mapper>

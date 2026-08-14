@@ -2,8 +2,10 @@ package com.linkfit.admin.controller.api;
 
 import com.linkfit.admin.common.ApiResponse;
 import com.linkfit.admin.mapper.ConversationMapper;
+import com.linkfit.admin.security.CrmUserDetails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
@@ -26,9 +28,9 @@ public class MessageApiController {
     // ── 발신자(트레이너) 목록 ──────────────────────────────────────────
 
     @GetMapping("/senders")
-    public ApiResponse<List<Map<String, Object>>> senders() {
+    public ApiResponse<List<Map<String, Object>>> senders(@AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Message] GET /api/messages/senders");
-        return ApiResponse.ok(conversationMapper.findSenders());
+        return ApiResponse.ok(conversationMapper.findSenders(gymId(principal)));
     }
 
     // ── 발송 대상 인원 수 미리보기 ────────────────────────────────────
@@ -37,9 +39,10 @@ public class MessageApiController {
     public ApiResponse<Map<String, Object>> previewCount(
             @RequestParam(defaultValue = "all_members") String targetType,
             @RequestParam(defaultValue = "") String tier,
-            @RequestParam(defaultValue = "") String trainerUserId) {
+            @RequestParam(defaultValue = "") String trainerUserId,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Message] GET /api/messages/preview-count - targetType={}, tier={}", targetType, tier);
-        long count = conversationMapper.countTarget(targetType,
+        long count = conversationMapper.countTarget(gymId(principal), targetType,
                 tier.isEmpty() ? null : tier,
                 trainerUserId.isEmpty() ? null : trainerUserId);
         return ApiResponse.ok(Map.of("count", count, "targetType", targetType));
@@ -68,7 +71,9 @@ public class MessageApiController {
      * - category: 공지 | 이벤트
      */
     @PostMapping("/broadcast")
-    public ApiResponse<Map<String, Object>> broadcast(@RequestBody Map<String, Object> body) {
+    public ApiResponse<Map<String, Object>> broadcast(@RequestBody Map<String, Object> body,
+                                                        @AuthenticationPrincipal CrmUserDetails principal) {
+        Long gymId = gymId(principal);
         String category    = (String) body.getOrDefault("category",    "공지");
         String targetType  = (String) body.getOrDefault("targetType",  "all_members");
         String tier        = (String) body.getOrDefault("tier",        "");
@@ -89,11 +94,11 @@ public class MessageApiController {
         boolean toTrainers = "all_trainers".equals(targetType);
 
         if (toTrainers) {
-            targetIds = conversationMapper.findTrainerTargets();
+            targetIds = conversationMapper.findTrainerTargets(gymId);
         } else {
             String tierFilter   = (tier == null || tier.isEmpty())         ? null : tier;
             String trainerFilter = (trainerUserId == null || trainerUserId.isEmpty()) ? null : trainerUserId;
-            targetIds = conversationMapper.findMemberTargets(tierFilter, trainerFilter);
+            targetIds = conversationMapper.findMemberTargets(gymId, tierFilter, trainerFilter);
         }
 
         int sent  = 0;
@@ -125,5 +130,9 @@ public class MessageApiController {
 
         log.info("[Message] broadcast complete - sent={}, failed={}", sent, failures.size());
         return ApiResponse.ok(Map.of("sent", sent, "failed", failures.size(), "total", targetIds.size()));
+    }
+
+    private Long gymId(CrmUserDetails principal) {
+        return principal != null ? principal.getGymId() : 1L;
     }
 }

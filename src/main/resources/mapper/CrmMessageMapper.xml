@@ -72,7 +72,7 @@
 
     <select id="findById" resultMap="msgMap">
         <include refid="msgJoin"/>
-         WHERE m.id = #{id} LIMIT 1
+         WHERE m.id = #{id} AND m.gym_id = #{gymId} LIMIT 1
     </select>
 
     <insert id="insert" parameterType="com.linkfit.admin.domain.CrmMessage">
@@ -84,7 +84,7 @@
     </insert>
 
     <update id="markRead">
-        UPDATE crm_messages SET is_read = 1 WHERE id = #{id}
+        UPDATE crm_messages SET is_read = 1 WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="markAllRead">
@@ -93,7 +93,7 @@
     </update>
 
     <delete id="delete">
-        DELETE FROM crm_messages WHERE id = #{id}
+        DELETE FROM crm_messages WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
 </mapper>

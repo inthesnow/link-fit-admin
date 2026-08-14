@@ -44,9 +44,10 @@ public class AnnouncementApiController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<CrmAnnouncement> getOne(@PathVariable String id) {
+    public ApiResponse<CrmAnnouncement> getOne(@PathVariable String id,
+                                                @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Announcement] GET /api/announcements/{id} - id={}", id);
-        return mapper.findById(id)
+        return mapper.findById(id, gymId(principal))
                 .map(ApiResponse::ok)
                 .orElse(ApiResponse.error("공지를 찾을 수 없습니다."));
     }
@@ -63,16 +64,22 @@ public class AnnouncementApiController {
     }
 
     @PatchMapping("/{id}/send")
-    public ApiResponse<Void> markSent(@PathVariable String id) {
+    public ApiResponse<Void> markSent(@PathVariable String id,
+                                       @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Announcement] PATCH /api/announcements/{id}/send - id={}", id);
-        mapper.markSent(id);
+        if (mapper.markSent(id, gymId(principal)) == 0) {
+            return ApiResponse.error("공지를 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable String id) {
+    public ApiResponse<Void> delete(@PathVariable String id,
+                                     @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Announcement] DELETE /api/announcements/{id} - id={}", id);
-        mapper.delete(id);
+        if (mapper.delete(id, gymId(principal)) == 0) {
+            return ApiResponse.error("공지를 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 

@@ -52,11 +52,12 @@
         ) t
     </select>
 
-    <!-- 회원 대상 목록 -->
+    <!-- 회원 대상 목록 (발신 트레이너 소속 gym 기준) -->
     <select id="findMemberTargets" resultType="string">
         SELECT u.user_id
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'MEMBER'
           AND u.is_active = 1
           AND u.deleted_at IS NULL
@@ -70,8 +71,9 @@
 
     <!-- 트레이너 대상 목록 -->
     <select id="findTrainerTargets" resultType="string">
-        SELECT user_id FROM users
-        WHERE role = 'TRAINER' AND is_active = 1 AND deleted_at IS NULL
+        SELECT u.user_id FROM users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        WHERE u.role = 'TRAINER' AND u.is_active = 1 AND u.deleted_at IS NULL
     </select>
 
     <!-- 발신자 목록 (트레이너) -->
@@ -79,6 +81,7 @@
         SELECT u.user_id AS userId, up.name AS name
         FROM users u
         JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'TRAINER' AND u.is_active = 1 AND u.deleted_at IS NULL
         ORDER BY up.name
     </select>
@@ -88,6 +91,7 @@
         SELECT COUNT(u.user_id)
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         <choose>
             <when test="targetType == 'all_trainers'">
                 WHERE u.role = 'TRAINER' AND u.is_active = 1 AND u.deleted_at IS NULL

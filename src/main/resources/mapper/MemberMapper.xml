@@ -325,6 +325,7 @@
                up.name AS member_name, up.contact AS member_phone,
                DATEDIFF(ms.end_date, CURDATE()) AS days_left
           FROM membership ms
+          JOIN user_gym ug ON ug.user_id = ms.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
           LEFT JOIN product p ON ms.product_id = p.id
           LEFT JOIN user_profiles up ON ms.user_id = up.user_id
          WHERE ms.status IS NULL
@@ -336,6 +337,7 @@
     <select id="countExpiringMemberships" resultType="long">
         SELECT COUNT(*)
           FROM membership ms
+          JOIN user_gym ug ON ug.user_id = ms.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
          WHERE ms.status IS NULL
            AND ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
     </select>
@@ -365,6 +367,10 @@
               SELECT 1 FROM member_freeze mf
                WHERE mf.user_id = u.user_id AND CURDATE() BETWEEN mf.freeze_start AND mf.freeze_end
           )
+    </select>
+
+    <select id="findTicketRemaining" resultType="int">
+        SELECT remaining FROM member_tickets WHERE user_id = #{userId} AND ticket_type = #{ticketType}
     </select>
 
     <insert id="upsertTicket">

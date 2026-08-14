@@ -42,9 +42,11 @@ public class FeedbackApiController {
     }
 
     @GetMapping("/requests/{id}")
-    public ResponseEntity<ApiResponse<FeedbackRequest>> getRequest(@PathVariable String id) {
+    public ResponseEntity<ApiResponse<FeedbackRequest>> getRequest(
+            @PathVariable String id,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Feedback] GET /api/feedback/requests/{id} - id={}", id);
-        return feedbackService.findRequestById(id)
+        return feedbackService.findRequestById(id, principal.getGymId())
                 .map(r -> ResponseEntity.ok(ApiResponse.ok(r)))
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -52,27 +54,36 @@ public class FeedbackApiController {
     @PatchMapping("/requests/{id}/assign")
     public ApiResponse<Void> assignRequestTrainer(
             @PathVariable String id,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Feedback] PATCH /api/feedback/requests/{id}/assign - id={}", id);
-        feedbackService.assignRequestTrainer(id, body.get("trainerId"));
+        if (!feedbackService.assignRequestTrainer(id, body.get("trainerId"), principal.getGymId())) {
+            return ApiResponse.error("요청을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 
     @PostMapping("/requests/{id}/respond")
     public ApiResponse<Void> respond(
             @PathVariable String id,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Feedback] POST /api/feedback/requests/{id}/respond - id={}", id);
-        feedbackService.respondToRequest(id, body.get("response"));
+        if (!feedbackService.respondToRequest(id, body.get("response"), principal.getGymId())) {
+            return ApiResponse.error("요청을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 
     @PatchMapping("/requests/{id}/status")
     public ApiResponse<Void> updateRequestStatus(
             @PathVariable String id,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Feedback] PATCH /api/feedback/requests/{id}/status - id={}", id);
-        feedbackService.updateRequestStatus(id, body.get("status"));
+        if (!feedbackService.updateRequestStatus(id, body.get("status"), principal.getGymId())) {
+            return ApiResponse.error("요청을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 }

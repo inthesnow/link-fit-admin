@@ -51,7 +51,7 @@
     </insert>
 
     <delete id="delete">
-        DELETE FROM crm_sales WHERE id = #{id}
+        DELETE FROM crm_sales WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
     <select id="monthlySummary" resultType="map">

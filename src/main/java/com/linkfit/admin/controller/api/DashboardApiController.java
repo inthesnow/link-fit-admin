@@ -93,17 +93,20 @@ public class DashboardApiController {
         log.info("[Dashboard] GET /api/dashboard/crm-summary");
         Long gymId = (principal != null) ? principal.getGymId() : 1L;
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("expiringCount",        memberMapper.countExpiringMemberships(30));
+        data.put("expiringCount",        memberMapper.countExpiringMemberships(30, gymId));
         data.put("pendingFeedback",       feedbackRequestMapper.count(gymId, "pending", null));
         data.put("pendingReregistration", reRegistrationMapper.countByStatus(gymId, "pending"));
         return ApiResponse.ok(data);
     }
 
     @GetMapping("/expiring")
-    public ApiResponse<Map<String, Object>> expiring(@RequestParam(defaultValue = "30") int days) {
+    public ApiResponse<Map<String, Object>> expiring(
+            @RequestParam(defaultValue = "30") int days,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/expiring - days={}", days);
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("count", memberMapper.countExpiringMemberships(days));
+        data.put("count", memberMapper.countExpiringMemberships(days, gymId));
         data.put("days", days);
         return ApiResponse.ok(data);
     }

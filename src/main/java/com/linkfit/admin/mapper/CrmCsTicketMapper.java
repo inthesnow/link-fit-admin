@@ -18,12 +18,12 @@ public interface CrmCsTicketMapper {
                @Param("status") String status,
                @Param("category") String category);
 
-    Optional<CrmCsTicket> findById(@Param("id") String id);
+    Optional<CrmCsTicket> findById(@Param("id") String id, @Param("gymId") Long gymId);
 
     void insert(CrmCsTicket ticket);
-    void updateStatus(@Param("id") String id, @Param("status") String status);
-    void assign(@Param("id") String id, @Param("assignedTo") String assignedTo);
-    void respond(@Param("id") String id, @Param("response") String response);
+    int updateStatus(@Param("id") String id, @Param("status") String status, @Param("gymId") Long gymId);
+    int assign(@Param("id") String id, @Param("assignedTo") String assignedTo, @Param("gymId") Long gymId);
+    int respond(@Param("id") String id, @Param("response") String response, @Param("gymId") Long gymId);
 
     int countByStatus(@Param("gymId") Long gymId, @Param("status") String status);
 }

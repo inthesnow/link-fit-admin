@@ -15,9 +15,9 @@ public interface CrmAnnouncementMapper {
                                    @Param("offset") int offset, @Param("size") int size);
     long count(@Param("gymId") Long gymId, @Param("target") String target);
 
-    Optional<CrmAnnouncement> findById(@Param("id") String id);
+    Optional<CrmAnnouncement> findById(@Param("id") String id, @Param("gymId") Long gymId);
 
     void insert(CrmAnnouncement announcement);
-    void markSent(@Param("id") String id);
-    void delete(@Param("id") String id);
+    int markSent(@Param("id") String id, @Param("gymId") Long gymId);
+    int delete(@Param("id") String id, @Param("gymId") Long gymId);
 }

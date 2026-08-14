@@ -89,6 +89,8 @@
                JOIN crm_users cu ON cu.id = crr.assigned_to
               WHERE cu.app_user_id = #{appUserId}
                 AND crr.status = 'pending')                                AS pendingReregistration
+          FROM user_gym ug
+         WHERE ug.user_id = #{appUserId} AND ug.gym_id = #{gymId} AND ug.is_active = 1
     </select>
 
     <resultMap id="assignedMemberMap" type="Member">
@@ -105,6 +107,7 @@
                CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'SUSPENDED' END AS status
           FROM user_profiles up
           JOIN users u ON u.user_id = up.user_id
+          JOIN user_gym ug ON ug.user_id = up.trainer_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
          WHERE up.trainer_id = #{appUserId}
          ORDER BY up.name ASC
     </select>

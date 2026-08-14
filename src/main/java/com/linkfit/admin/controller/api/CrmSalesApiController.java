@@ -97,9 +97,12 @@ public class CrmSalesApiController {
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable String id) {
+    public ApiResponse<Void> delete(@PathVariable String id,
+                                     @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CrmSales] DELETE /api/crm-sales/{id} - id={}", id);
-        mapper.delete(id);
+        if (mapper.delete(id, gymId(principal)) == 0) {
+            return ApiResponse.error("매출 내역을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 

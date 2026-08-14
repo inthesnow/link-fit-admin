@@ -69,11 +69,13 @@ public class CrmInboxApiController {
     }
 
     @GetMapping("/messages/{id}")
-    public ApiResponse<CrmMessage> getOne(@PathVariable String id) {
+    public ApiResponse<CrmMessage> getOne(@PathVariable String id,
+                                           @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CrmInbox] GET /api/inbox/messages/{id} - id={}", id);
-        CrmMessage msg = messageMapper.findById(id).orElse(null);
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        CrmMessage msg = messageMapper.findById(id, gymId).orElse(null);
         if (msg == null) return ApiResponse.error("메시지를 찾을 수 없습니다.");
-        messageMapper.markRead(id);
+        messageMapper.markRead(id, gymId);
         return ApiResponse.ok(msg);
     }
 
@@ -95,9 +97,11 @@ public class CrmInboxApiController {
     }
 
     @PatchMapping("/messages/{id}/read")
-    public ApiResponse<Void> markRead(@PathVariable String id) {
+    public ApiResponse<Void> markRead(@PathVariable String id,
+                                       @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CrmInbox] PATCH /api/inbox/messages/{id}/read - id={}", id);
-        messageMapper.markRead(id);
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        messageMapper.markRead(id, gymId);
         return ApiResponse.ok();
     }
 
@@ -111,9 +115,11 @@ public class CrmInboxApiController {
     }
 
     @DeleteMapping("/messages/{id}")
-    public ApiResponse<Void> delete(@PathVariable String id) {
+    public ApiResponse<Void> delete(@PathVariable String id,
+                                     @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CrmInbox] DELETE /api/inbox/messages/{id} - id={}", id);
-        messageMapper.delete(id);
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        messageMapper.delete(id, gymId);
         return ApiResponse.ok();
     }
 }

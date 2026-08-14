@@ -72,8 +72,8 @@ public class MyBatisReRegistrationService implements ReRegistrationService {
     public int autoClassify(Long gymId) {
         int created = 0;
 
-        // 이용권 만료 30일 이내
-        List<Membership> expiring = memberMapper.findExpiringMemberships(30, 0, 500);
+        // 이용권 만료 30일 이내 (이 gym 소속 회원만 — 배치 작업이라 페이지네이션 없이 넉넉한 상한만 둔다)
+        List<Membership> expiring = memberMapper.findExpiringMemberships(30, gymId, 0, 10000);
         for (Membership m : expiring) {
             String memberId = m.getMemberId();
             if (memberId == null) continue;

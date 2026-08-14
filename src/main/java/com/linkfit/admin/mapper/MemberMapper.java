@@ -57,11 +57,12 @@ public interface MemberMapper {
     // 신규/재유입/재등록 분류용 — 이 회원의 과거 이용권/PT 이력 요약({cnt, lastEndDate})
     Map<String, Object> findMembershipHistorySummary(@Param("memberId") String memberId);
 
-    List<Membership> findExpiringMemberships(@Param("days") int days,
+    List<Membership> findExpiringMemberships(@Param("days") int days, @Param("gymId") Long gymId,
                                               @Param("offset") int offset, @Param("size") int size);
-    long countExpiringMemberships(@Param("days") int days);
+    long countExpiringMemberships(@Param("days") int days, @Param("gymId") Long gymId);
 
     List<MemberTicket> findTickets(@Param("userId") String userId);
+    Integer findTicketRemaining(@Param("userId") String userId, @Param("ticketType") String ticketType);
     // 활성 회원 전체(ONE_POINT/FEEDBACK/PHOTO/VIDEO) 잔량 합계 — {onePoint, feedback, photo, video}
     Map<String, Object> ticketTotals(@Param("gymId") Long gymId);
     void upsertTicket(@Param("userId") String userId, @Param("ticketType") String ticketType,

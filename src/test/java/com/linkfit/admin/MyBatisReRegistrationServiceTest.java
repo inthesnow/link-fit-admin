@@ -36,7 +36,7 @@ class MyBatisReRegistrationServiceTest {
 
     @Test
     void autoClassify_noExpiringMemberships_returnsZero() {
-        when(memberMapper.findExpiringMemberships(30, 0, 500))
+        when(memberMapper.findExpiringMemberships(30, 1L, 0, 10000))
                 .thenReturn(Collections.emptyList());
 
         int result = service.autoClassify(1L);
@@ -49,7 +49,7 @@ class MyBatisReRegistrationServiceTest {
     void autoClassify_newExpiry_createsRecord() {
         Membership m = new Membership();
         m.setMemberId("member-001");
-        when(memberMapper.findExpiringMemberships(30, 0, 500)).thenReturn(List.of(m));
+        when(memberMapper.findExpiringMemberships(30, 1L, 0, 10000)).thenReturn(List.of(m));
         when(mapper.existsByMemberAndReason("member-001", 1L, "membership_expiry")).thenReturn(false);
 
         int result = service.autoClassify(1L);
@@ -69,7 +69,7 @@ class MyBatisReRegistrationServiceTest {
     void autoClassify_alreadyExists_skipsInsert() {
         Membership m = new Membership();
         m.setMemberId("member-001");
-        when(memberMapper.findExpiringMemberships(30, 0, 500)).thenReturn(List.of(m));
+        when(memberMapper.findExpiringMemberships(30, 1L, 0, 10000)).thenReturn(List.of(m));
         when(mapper.existsByMemberAndReason("member-001", 1L, "membership_expiry")).thenReturn(true);
 
         int result = service.autoClassify(1L);
@@ -82,7 +82,7 @@ class MyBatisReRegistrationServiceTest {
     void autoClassify_nullMemberId_skips() {
         Membership m = new Membership();
         m.setMemberId(null);
-        when(memberMapper.findExpiringMemberships(30, 0, 500)).thenReturn(List.of(m));
+        when(memberMapper.findExpiringMemberships(30, 1L, 0, 10000)).thenReturn(List.of(m));
 
         int result = service.autoClassify(1L);
 
@@ -94,7 +94,7 @@ class MyBatisReRegistrationServiceTest {
     void autoClassify_multipleMembers_createsForNewOnly() {
         Membership m1 = new Membership(); m1.setMemberId("mem-001");
         Membership m2 = new Membership(); m2.setMemberId("mem-002");
-        when(memberMapper.findExpiringMemberships(30, 0, 500)).thenReturn(List.of(m1, m2));
+        when(memberMapper.findExpiringMemberships(30, 1L, 0, 10000)).thenReturn(List.of(m1, m2));
         when(mapper.existsByMemberAndReason("mem-001", 1L, "membership_expiry")).thenReturn(false);
         when(mapper.existsByMemberAndReason("mem-002", 1L, "membership_expiry")).thenReturn(true);
 

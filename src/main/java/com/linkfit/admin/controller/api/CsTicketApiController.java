@@ -55,9 +55,10 @@ public class CsTicketApiController {
     }
 
     @GetMapping("/tickets/{id}")
-    public ApiResponse<CrmCsTicket> getOne(@PathVariable String id) {
+    public ApiResponse<CrmCsTicket> getOne(@PathVariable String id,
+                                            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CsTicket] GET /api/cs/tickets/{id} - id={}", id);
-        return mapper.findById(id)
+        return mapper.findById(id, gymId(principal))
                 .map(ApiResponse::ok)
                 .orElse(ApiResponse.error("티켓을 찾을 수 없습니다."));
     }
@@ -74,25 +75,34 @@ public class CsTicketApiController {
 
     @PatchMapping("/tickets/{id}/status")
     public ApiResponse<Void> updateStatus(@PathVariable String id,
-                                           @RequestBody Map<String, String> body) {
+                                           @RequestBody Map<String, String> body,
+                                           @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CsTicket] PATCH /api/cs/tickets/{id}/status - id={}", id);
-        mapper.updateStatus(id, body.get("status"));
+        if (mapper.updateStatus(id, body.get("status"), gymId(principal)) == 0) {
+            return ApiResponse.error("티켓을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 
     @PatchMapping("/tickets/{id}/assign")
     public ApiResponse<Void> assign(@PathVariable String id,
-                                     @RequestBody Map<String, String> body) {
+                                     @RequestBody Map<String, String> body,
+                                     @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CsTicket] PATCH /api/cs/tickets/{id}/assign - id={}", id);
-        mapper.assign(id, body.get("assignedTo"));
+        if (mapper.assign(id, body.get("assignedTo"), gymId(principal)) == 0) {
+            return ApiResponse.error("티켓을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 
     @PatchMapping("/tickets/{id}/respond")
     public ApiResponse<Void> respond(@PathVariable String id,
-                                      @RequestBody Map<String, String> body) {
+                                      @RequestBody Map<String, String> body,
+                                      @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[CsTicket] PATCH /api/cs/tickets/{id}/respond - id={}", id);
-        mapper.respond(id, body.get("response"));
+        if (mapper.respond(id, body.get("response"), gymId(principal)) == 0) {
+            return ApiResponse.error("티켓을 찾을 수 없습니다.");
+        }
         return ApiResponse.ok();
     }
 

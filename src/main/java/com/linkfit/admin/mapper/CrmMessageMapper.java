@@ -22,9 +22,9 @@ public interface CrmMessageMapper {
     long countNotices(@Param("gymId") Long gymId);
     long countUnread(@Param("gymId") Long gymId, @Param("receiverId") String receiverId);
 
-    Optional<CrmMessage> findById(@Param("id") String id);
+    Optional<CrmMessage> findById(@Param("id") String id, @Param("gymId") Long gymId);
     void insert(CrmMessage message);
-    void markRead(@Param("id") String id);
+    int markRead(@Param("id") String id, @Param("gymId") Long gymId);
     void markAllRead(@Param("gymId") Long gymId, @Param("receiverId") String receiverId);
-    void delete(@Param("id") String id);
+    int delete(@Param("id") String id, @Param("gymId") Long gymId);
 }

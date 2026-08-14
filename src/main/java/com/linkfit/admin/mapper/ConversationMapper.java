@@ -21,17 +21,17 @@ public interface ConversationMapper {
     // ── 발송 대상 조회 ─────────────────────────────────────────────────
 
     /** 활성 회원 user_id 목록 (tier 필터 선택) */
-    List<String> findMemberTargets(@Param("tier") String tier,
+    List<String> findMemberTargets(@Param("gymId") Long gymId, @Param("tier") String tier,
                                    @Param("trainerUserId") String trainerUserId);
 
     /** 활성 트레이너 user_id 목록 */
-    List<String> findTrainerTargets();
+    List<String> findTrainerTargets(@Param("gymId") Long gymId);
 
     /** 활성 트레이너 목록 (발신자 선택용 드롭다운) */
-    List<Map<String, Object>> findSenders();
+    List<Map<String, Object>> findSenders(@Param("gymId") Long gymId);
 
     /** 발송 대상 인원 수 미리보기 */
-    long countTarget(@Param("targetType") String targetType,
+    long countTarget(@Param("gymId") Long gymId, @Param("targetType") String targetType,
                      @Param("tier") String tier,
                      @Param("trainerUserId") String trainerUserId);
 

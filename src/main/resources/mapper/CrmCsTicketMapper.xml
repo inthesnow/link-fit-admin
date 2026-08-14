@@ -48,7 +48,7 @@
 
     <select id="findById" resultMap="ticketMap">
         <include refid="ticketJoin"/>
-         WHERE t.id = #{id} LIMIT 1
+         WHERE t.id = #{id} AND t.gym_id = #{gymId} LIMIT 1
     </select>
 
     <insert id="insert" parameterType="com.linkfit.admin.domain.CrmCsTicket">
@@ -57,21 +57,21 @@
     </insert>
 
     <update id="updateStatus">
-        UPDATE crm_cs_tickets SET status = #{status} WHERE id = #{id}
+        UPDATE crm_cs_tickets SET status = #{status} WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="assign">
         UPDATE crm_cs_tickets
            SET assigned_to = #{assignedTo},
                status = CASE WHEN status = 'received' THEN 'checking' ELSE status END
-         WHERE id = #{id}
+         WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="respond">
         UPDATE crm_cs_tickets
            SET response = #{response}, responded_at = NOW(),
                status = 'answered'
-         WHERE id = #{id}
+         WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <select id="countByStatus" resultType="int">

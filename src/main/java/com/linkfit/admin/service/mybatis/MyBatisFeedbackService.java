@@ -30,22 +30,22 @@ public class MyBatisFeedbackService implements FeedbackService {
     }
 
     @Override
-    public Optional<FeedbackRequest> findRequestById(String id) {
-        return requestMapper.findById(id);
+    public Optional<FeedbackRequest> findRequestById(String id, Long gymId) {
+        return requestMapper.findById(id, gymId);
     }
 
     @Override
-    public void assignRequestTrainer(String id, String trainerId) {
-        requestMapper.assignTrainer(id, trainerId);
+    public boolean assignRequestTrainer(String id, String trainerId, Long gymId) {
+        return requestMapper.assignTrainer(id, trainerId, gymId) > 0;
     }
 
     @Override
-    public void respondToRequest(String id, String response) {
-        requestMapper.respond(id, response);
+    public boolean respondToRequest(String id, String response, Long gymId) {
+        return requestMapper.respond(id, response, gymId) > 0;
     }
 
     @Override
-    public void updateRequestStatus(String id, String status) {
-        requestMapper.updateStatus(id, status);
+    public boolean updateRequestStatus(String id, String status, Long gymId) {
+        return requestMapper.updateStatus(id, status, gymId) > 0;
     }
 }
