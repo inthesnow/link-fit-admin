@@ -6,8 +6,14 @@
 > 이를 계기로 lof-backend / lof-admin 전체에서 "2번째 지점이 생기면 무엇이 깨지는지"를
 > DB 스키마 + 컨트롤러/매퍼 코드 기준으로 재검증했다.
 >
-> 현재는 지점이 `LF01` 1개뿐이라 아래 문제들이 실사용에 영향을 주지 않는다.
-> **지점을 추가하기 전에 반드시 확인/조치가 필요하다.**
+> ~~현재는 지점이 `LF01` 1개뿐이라 아래 문제들이 실사용에 영향을 주지 않는다.~~
+> **[2026-08-20 갱신] 더 이상 사실이 아님 — 이 문서 작성 5일 뒤인 2026-07-26에
+> `docs/sql/gym_lf02_seed_20260726.sql`로 LF02(강남점, `gym.id=101`)가 실제로 생성되어
+> 아래 문제들이 이미 실사용 조건에 들어와 있다.** 2026-08-20 DB 전수조사로 아래 §1의
+> 10개 테이블이 여전히 gym_id 없음을 재확인했고, 이 문서 작성 이후 신설된 테이블 중
+> 같은 문제를 가진 4개(`product_package`/`class_session`/`member_freeze`/`staff_attendance`)를
+> 추가로 발견했다. **§5-1의 스키마 마이그레이션 SQL을 `docs/sql/gym_id_backfill_20260820.sql`로
+> 작성해둠 — 아직 실행 전, 검토 후 적용 필요.**
 
 ---
 
@@ -92,6 +98,12 @@
 1. **스키마 마이그레이션**: `product`, `membership`, `member_tickets`, `trainer_schedules`,
    `attendance`, `consult`, `sale`, `gym_setting`, `gym_banner`, `gym_holiday`에 `gym_id`
    컬럼 추가 + 기존 데이터 백필(전부 `LF01`로).
+   **[2026-08-20] SQL 작성 완료 — `docs/sql/gym_id_backfill_20260820.sql`.** 이 문서 작성 이후
+   신설된 `product_package`/`class_session`/`member_freeze`/`staff_attendance` 4개도 같은 사유로
+   포함시킴. `locker`는 `locker_zone.gym_id`(2026-08-10 기 반영)를 통해, `class_attendee`는
+   `class_session.gym_id`(이번에 추가)를 통해 간접 스코핑되므로 제외. `payment_method`는 전
+   지점 공통 정책일 가능성이 있어 임의로 포함하지 않고 보류. **아직 실행 전(로컬 미적용) —
+   적용 후에는 2번 항목(코드 수정)이 뒤따라야 실제로 지점별로 갈라진다.**
 2. **`gym_setting` 다지점화**: `id=1` 하드코딩을 `gym_id` 기준 조회/갱신으로 변경 (lof-backend,
    lof-admin 양쪽 매퍼 전부 수정 필요).
 3. **`GET /api/trainers` 지점 필터 추가**: 회원의 소속 지점(`user_gym`) 기준으로 트레이너 목록
