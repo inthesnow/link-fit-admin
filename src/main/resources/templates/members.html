@@ -80,14 +80,6 @@
         </div>
     </header>
 
-    <!-- 회원 유형 탭 -->
-    <div class="sub-tabs" style="padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface)">
-        <button class="sub-tab active" onclick="setMemberTab('', this)">전체</button>
-        <button class="sub-tab" onclick="setMemberTab('membership', this)">이용권 회원</button>
-        <button class="sub-tab" onclick="setMemberTab('PT', this)">PT 회원</button>
-        <button class="sub-tab" onclick="setMemberTab('expiring', this)">만료예정 회원</button>
-    </div>
-
     <div class="search-bar">
         <div class="search-input-wrap">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
@@ -243,6 +235,7 @@
                 <button class="detail-tab active" id="dtab-info"      onclick="switchDetailTab('info')">기본정보</button>
                 <button class="detail-tab"        id="dtab-ms"        onclick="switchDetailTab('ms')">이용권</button>
                 <button class="detail-tab"        id="dtab-ticket"    onclick="switchDetailTab('ticket')">티켓</button>
+                <button class="detail-tab"        id="dtab-trainer"   onclick="switchDetailTab('trainer')">담당 트레이너</button>
                 <button class="detail-tab"        id="dtab-memo"      onclick="switchDetailTab('memo')">메모</button>
             </div>
 
@@ -464,6 +457,21 @@
                 </div>
             </div>
 
+            <!-- 담당 트레이너 -->
+            <div class="detail-pane" id="dpane-trainer" style="display:none">
+                <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">현재 담당 트레이너</div>
+                <div style="font-size:15px;font-weight:600;margin-bottom:20px" id="trainerCurrentName">-</div>
+                <div class="form-group">
+                    <label class="form-label">담당 트레이너 변경</label>
+                    <select class="form-select" id="trainerSelect">
+                        <option value="">미지정</option>
+                    </select>
+                </div>
+                <div style="margin-top:16px;text-align:right">
+                    <button class="btn btn-primary" id="trainerSaveBtn" onclick="saveAssignedTrainer()">저장</button>
+                </div>
+            </div>
+
             <!-- 메모 -->
             <div class="detail-pane" id="dpane-memo" style="display:none">
                 <div id="crmNoteList" style="max-height:280px;overflow-y:auto;margin-bottom:12px"></div>
@@ -508,7 +516,6 @@
 let currentPage = 0;
 const pageSize = 10;
 let searchTimer = null;
-let memberTypeFilter = '';
 let selectedTrainerIds = [];
 let trainerList = [];
 
@@ -523,14 +530,6 @@ function csrfHeaders(extra) {
 function debounceSearch() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => { currentPage = 0; loadMembers(); }, 350);
-}
-
-function setMemberTab(typeVal, btn) {
-    memberTypeFilter = typeVal;
-    currentPage = 0;
-    document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    loadMembers();
 }
 
 function resetExtraFilters() {
@@ -629,9 +628,6 @@ async function loadMembers() {
     const minAbs  = document.getElementById('minAbsentDays').value;
 
     let url = `/api/members?keyword=${encodeURIComponent(keyword)}&status=${status}&tier=${tier}&page=${currentPage}&size=${pageSize}`;
-    if (memberTypeFilter === 'PT')              url += '&memberType=PT';
-    else if (memberTypeFilter === 'membership') url += '&memberType=MEMBERSHIP';
-    else if (memberTypeFilter === 'expiring')   url += '&expiring=30';
     url += trainerQuery();
     if (minPt  !== '') url += `&minPtRemaining=${encodeURIComponent(minPt)}`;
     if (minDL  !== '') url += `&minDaysLeft=${encodeURIComponent(minDL)}`;
@@ -807,14 +803,15 @@ function closeDetailModal() {
 }
 
 function switchDetailTab(tab) {
-    ['info','ms','ticket','memo'].forEach(t => {
+    ['info','ms','ticket','trainer','memo'].forEach(t => {
         document.getElementById('dtab-' + t).classList.toggle('active', t === tab);
         document.getElementById('dpane-' + t).style.display = t === tab ? '' : 'none';
     });
-    if (tab === 'info')   loadMembershipList();
-    if (tab === 'ms')     loadMembershipForm();
-    if (tab === 'ticket') refreshTicketCounts();
-    if (tab === 'memo')   loadNotes();
+    if (tab === 'info')    loadMembershipList();
+    if (tab === 'ms')      loadMembershipForm();
+    if (tab === 'ticket')  refreshTicketCounts();
+    if (tab === 'trainer') renderAssignedTrainerPane();
+    if (tab === 'memo')    loadNotes();
 }
 
 async function saveDetailInfo() {
@@ -1278,6 +1275,36 @@ async function saveTicket() {
         });
         if (!res.ok) { alert('저장에 실패했습니다.'); return; }
         await refreshTicketCounts();
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ── 담당 트레이너 ────────────────────────────────────────────
+async function renderAssignedTrainerPane() {
+    if (!trainerList.length) await loadTrainerList();
+    const sel = document.getElementById('trainerSelect');
+    sel.innerHTML = '<option value="">미지정</option>' +
+        trainerList.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+    const currentId = detailMemberData?.trainerId || '';
+    sel.value = currentId;
+    document.getElementById('trainerCurrentName').textContent = detailMemberData?.trainerName || '미지정';
+}
+
+async function saveAssignedTrainer() {
+    const trainerId = document.getElementById('trainerSelect').value || null;
+    const btn = document.getElementById('trainerSaveBtn');
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/members/${detailMemberId}/assigned-trainer`, {
+            method: 'PATCH', headers: csrfHeaders(), body: JSON.stringify({ trainerId })
+        });
+        if (!res.ok) { alert('저장에 실패했습니다.'); return; }
+        detailMemberData.trainerId = trainerId || null;
+        detailMemberData.trainerName = trainerId ? (trainerList.find(t => t.id === trainerId)?.name || trainerId) : null;
+        document.getElementById('trainerCurrentName').textContent = detailMemberData.trainerName || '미지정';
+        alert('저장되었습니다.');
+        loadMembers();
     } finally {
         btn.disabled = false;
     }
