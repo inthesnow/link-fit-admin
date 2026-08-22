@@ -245,6 +245,31 @@ JWT에 `role`(super_admin/gym_admin/trainer) 클레임이 있고 `ROLE_xxx` Gran
 `user_profiles.trainer_id`(정상 동작)와 `crm_member_assignments`(중복 시스템, 죽은 코드에 가까움 + 실사용 시
 항상 실패)가 공존한다. 2026-07-26에 `docs/trainer-assignment-permissions-review.md`로 코드 기준 전수 검토함.
 
+### 3-2. 최초 로그인 비밀번호 변경 강제 (2026-08-21)
+지점코드 발급으로 만들어진 gym_admin 계정은 전 지점이 `admin`/`linkonfit` 기본 비밀번호를
+공유한다(`docs/admin-todo.md`에도 "보류"로 남아있던 항목). 이제 최초 로그인 시 1차(로그인)
+비밀번호 변경 + 2차 비밀번호 생성을 강제한다.
+- `crm_users.must_change_password` 컬럼(`docs/sql/crm_user_must_change_password_20260821.sql`) —
+  lof-potal의 지점코드 발급(`GymService.issueBranchCode`)이 `1`로 세팅. 트레이너 승격 계정(앱
+  비밀번호 위임 검증)은 기본 비밀번호를 쓰지 않으므로 대상 아님(컬럼 기본값 0).
+- `MustChangePasswordInterceptor`(`WebConfig`에 `LockedCategoryInterceptor`보다 먼저 등록) —
+  이 플래그가 켜진 계정은 `/change-password-first`/로그인/로그아웃/정적 리소스를 제외한 모든
+  페이지·API를 차단한다(페이지는 리다이렉트, `/api/**`는 423). `LockedCategoryInterceptor`와
+  동일한 "principal 없으면 통과 → 인터셉터가 최종 방어선" 패턴을 그대로 따름.
+- `POST /api/auth/change-password-first` — `{currentPassword, newPassword, newSecondPassword}`.
+  1차는 최소 4자리, 2차는 영문+숫자+특수문자 혼합 최소 8자리(대소문자 무관, 정규식
+  `^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$`) — 검증 실패 시 에러, 성공 시
+  `password_hash`/`second_password_hash`/`must_change_password=0`을 한 UPDATE로 원자적으로 갱신.
+  이미 완료된 계정이 다시 호출하면 거부(이 엔드포인트는 최초 1회 전용 — 이후 비밀번호 변경은
+  기존 "2차 비밀번호 변경"(`/api/auth/second-password`)과는 별도로, 1차 비밀번호만 다시 바꾸는
+  일반 기능은 아직 없음, 필요시 별도 요청).
+- 실제 로그인(`admin/linkonfit`) → `/dashboard` 리다이렉트 → `/api/dashboard/**` 423 →
+  `POST /api/auth/change-password-first` 검증 실패 3종 + 성공 → 플래그 해제 후 `/dashboard`
+  정상 접근 → 새 1차 비밀번호로 재로그인까지 end-to-end 실제 호출로 검증함(테스트용 지점
+  LF99는 검증 후 삭제).
+- 확인 시점 기존 gym_admin 계정 0건이라 소급 UPDATE는 하지 않음 — 이미 발급된 계정 중
+  기본 비밀번호를 안 바꾼 게 있다면 개별적으로 플래그를 켜야 함(마이그레이션 파일 주석 참고).
+
 ### 4. 로그인 쿠키에 `Secure`/`SameSite` 미설정 + CSRF 전역 비활성
 `AuthApiController`에서 쿠키에 `HttpOnly`만 설정하고 `Secure`/`SameSite`는 없음. `SecurityConfig`도
 CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 동작에만 의존하고 있다.
@@ -268,6 +293,7 @@ CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 �
 - `crm_users` 기반 로그인 (`AuthApiController`, BCrypt 해싱) — 위 "알려진 이슈" 2·3·4번 참고
 - CORS 설정 (`application-dev.yml`의 `app.cors.allowed-origins`)
 - 로그아웃 쿠키 삭제 처리
+- 지점코드 발급 계정 최초 로그인 시 1/2차 비밀번호 변경 강제 (위 "알려진 이슈 3-2번" 참고)
 
 **백엔드**
 - `ApiResponse<T>` 공통 응답 포맷, `GlobalExceptionHandler`(404/500)
@@ -388,6 +414,7 @@ gradlew.bat bootRun
 | URL | 설명 |
 |---|---|
 | `GET /login` | 로그인 페이지 |
+| `GET /change-password-first` | 최초 로그인 비밀번호 변경(강제) — `must_change_password` 계정만, 완료 계정은 `/dashboard`로 리다이렉트 |
 | `GET /dashboard` | 대시보드 |
 | `GET /members` | 회원 관리 |
 | `GET /staff` | 직원 관리 |
@@ -414,6 +441,7 @@ gradlew.bat bootRun
 |---|---|---|
 | `POST /api/auth/login` | AuthApiController | JWT 로그인 |
 | `POST /api/auth/logout` | AuthApiController | 쿠키 삭제 로그아웃 |
+| `POST /api/auth/change-password-first` | AuthApiController | 최초 로그인 강제 변경(1차+2차 비밀번호 동시 설정) — `must_change_password` 계정 전용 |
 | `/api/dashboard/**` | DashboardApiController | 통계 (members/classes/attendance/revenue/consults/crm-summary) |
 | `/api/members/**` | MemberApiController | 회원 CRUD, 상태·등급·유형 변경, 티켓 조회·충전, 메모·태그, 트레이너 지정 |
 | `/api/staff/**` | StaffApiController | 직원 CRUD, 역할 변경, 대시보드, 담당 회원 |

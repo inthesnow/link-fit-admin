@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,6 +26,10 @@ import org.slf4j.LoggerFactory;
 public class AuthApiController {
 
     private static final Logger log = LoggerFactory.getLogger(AuthApiController.class);
+
+    // 2차 비밀번호: 영문 + 숫자 + 특수문자 혼합, 최소 8자리 (대소문자 구분 없음)
+    private static final Pattern SECOND_PASSWORD_PATTERN =
+            Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d)(?=.*[^A-Za-z0-9]).{8,}$");
 
     private final CrmUserService crmUserService;
     private final UserAuthMapper userAuthMapper;
@@ -124,8 +129,45 @@ public class AuthApiController {
                 "branchCode",      user.getBranchCode(),
                 "gymId",           user.getGymId(),
                 "hasSecondPassword", user.getSecondPasswordHash() != null,
-                "lockedCategories", List.copyOf(user.lockedCategorySet())
+                "lockedCategories", List.copyOf(user.lockedCategorySet()),
+                "mustChangePassword", user.isMustChangePassword()
         ));
+    }
+
+    // ── 최초 로그인 강제 변경: 1차 비밀번호 변경 + 2차 비밀번호 생성을 한 번에 처리 ──
+    // 지점코드 발급 시 기본 비밀번호(linkonfit)로 만들어진 계정 전용 — must_change_password가
+    // 이미 해제된 계정은 이 엔드포인트로 다시 바꿀 수 없다(일반 비밀번호 변경 기능은 별도 범위).
+    @PostMapping("/change-password-first")
+    public ApiResponse<?> changePasswordFirst(@AuthenticationPrincipal CrmUserDetails principal,
+                                               @RequestBody Map<String, String> body) {
+        String currentPassword   = body.get("currentPassword");
+        String newPassword       = body.get("newPassword");
+        String newSecondPassword = body.get("newSecondPassword");
+
+        if (currentPassword == null || newPassword == null || newSecondPassword == null) {
+            return ApiResponse.error("현재 비밀번호, 새 1차 비밀번호, 2차 비밀번호를 모두 입력해주세요.");
+        }
+
+        CrmUser user = crmUserService.findById(principal.getId()).orElse(null);
+        if (user == null) return ApiResponse.error("사용자를 찾을 수 없습니다.");
+        if (!user.isMustChangePassword()) {
+            return ApiResponse.error("이미 초기 설정이 완료된 계정입니다.");
+        }
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            return ApiResponse.error("현재 비밀번호가 올바르지 않습니다.");
+        }
+        if (newPassword.length() < 4) {
+            return ApiResponse.error("1차 비밀번호는 최소 4자리 이상이어야 합니다.");
+        }
+        if (!SECOND_PASSWORD_PATTERN.matcher(newSecondPassword).matches()) {
+            return ApiResponse.error("2차 비밀번호는 영문, 숫자, 특수문자를 모두 포함해 최소 8자리 이상이어야 합니다.");
+        }
+
+        crmUserService.completeFirstLogin(
+                user.getId(),
+                passwordEncoder.encode(newPassword),
+                passwordEncoder.encode(newSecondPassword));
+        return ApiResponse.ok();
     }
 
     // ── 2차 비밀번호 설정/변경 (본인 로그인 비밀번호 재확인 필요) ──

@@ -13,6 +13,7 @@
         <result property="username"     column="username"/>
         <result property="passwordHash" column="password_hash"/>
         <result property="secondPasswordHash" column="second_password_hash"/>
+        <result property="mustChangePassword" column="must_change_password"/>
         <result property="role"         column="role"/>
         <result property="lockedCategories" column="locked_categories"/>
         <result property="active"       column="is_active"/>
@@ -62,6 +63,14 @@
 
     <update id="updateSecondPassword">
         UPDATE crm_users SET second_password_hash = #{secondPasswordHash} WHERE id = #{id}
+    </update>
+
+    <update id="completeFirstLogin">
+        UPDATE crm_users
+        SET password_hash = #{passwordHash},
+            second_password_hash = #{secondPasswordHash},
+            must_change_password = 0
+        WHERE id = #{id}
     </update>
 
     <update id="updateLockedCategories">

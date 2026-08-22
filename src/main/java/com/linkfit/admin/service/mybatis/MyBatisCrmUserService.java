@@ -35,4 +35,9 @@ public class MyBatisCrmUserService implements CrmUserService {
     public void updateLockedCategories(String id, String lockedCategories) {
         crmUserMapper.updateLockedCategories(id, lockedCategories);
     }
+
+    @Override
+    public void completeFirstLogin(String id, String passwordHash, String secondPasswordHash) {
+        crmUserMapper.completeFirstLogin(id, passwordHash, secondPasswordHash);
+    }
 }

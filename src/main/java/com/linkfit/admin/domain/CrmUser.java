@@ -12,6 +12,7 @@ public class CrmUser {
     private String username;
     private String passwordHash;
     private String secondPasswordHash;  // 2차 비밀번호 (카테고리 잠금 해제용, 로그인 비밀번호와 별도)
+    private boolean mustChangePassword; // 지점코드 발급 시 기본 비밀번호로 만들어진 계정 — 최초 로그인 시 1/2차 비밀번호 변경 강제
     private String role;         // super_admin | gym_admin | trainer
     private String lockedCategories;    // 콤마 구분 카테고리 키, 예: "crm-sales,revenue"
     private boolean active;
@@ -37,6 +38,8 @@ public class CrmUser {
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
     public String getSecondPasswordHash() { return secondPasswordHash; }
     public void setSecondPasswordHash(String secondPasswordHash) { this.secondPasswordHash = secondPasswordHash; }
+    public boolean isMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
     public String getLockedCategories() { return lockedCategories; }

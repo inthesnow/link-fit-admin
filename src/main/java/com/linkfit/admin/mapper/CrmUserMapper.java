@@ -26,6 +26,11 @@ public interface CrmUserMapper {
 
     int updateSecondPassword(@Param("id") String id, @Param("secondPasswordHash") String secondPasswordHash);
 
+    // 최초 로그인 강제 변경 완료: 1차 비밀번호 + 2차 비밀번호를 함께 저장하고 플래그 해제
+    int completeFirstLogin(@Param("id") String id,
+                            @Param("passwordHash") String passwordHash,
+                            @Param("secondPasswordHash") String secondPasswordHash);
+
     int updateLockedCategories(@Param("id") String id, @Param("lockedCategories") String lockedCategories);
 
     // 트레이너 재지정 시 기존(비활성화된) CRM 계정을 재활성화. gymId도 함께 최신화(트레이너 본인의

@@ -9,4 +9,5 @@ public interface CrmUserService {
     Optional<CrmUser> findById(String id);
     void updateSecondPassword(String id, String secondPasswordHash);
     void updateLockedCategories(String id, String lockedCategories);
+    void completeFirstLogin(String id, String passwordHash, String secondPasswordHash);
 }
