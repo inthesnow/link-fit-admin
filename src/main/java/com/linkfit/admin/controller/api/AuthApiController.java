@@ -179,12 +179,36 @@ public class AuthApiController {
         if (currentPassword == null || newSecondPassword == null || newSecondPassword.isBlank()) {
             return ApiResponse.error("현재 비밀번호와 새 2차 비밀번호를 모두 입력해주세요.");
         }
+        if (!SECOND_PASSWORD_PATTERN.matcher(newSecondPassword).matches()) {
+            return ApiResponse.error("2차 비밀번호는 영문, 숫자, 특수문자를 모두 포함해 최소 8자리 이상이어야 합니다.");
+        }
         CrmUser user = crmUserService.findById(principal.getId()).orElse(null);
         if (user == null) return ApiResponse.error("사용자를 찾을 수 없습니다.");
         if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
             return ApiResponse.error("현재 비밀번호가 올바르지 않습니다.");
         }
         crmUserService.updateSecondPassword(user.getId(), passwordEncoder.encode(newSecondPassword));
+        return ApiResponse.ok();
+    }
+
+    // ── 1차(로그인) 비밀번호 변경 — 온보딩(최초 로그인) 완료 후 설정 화면에서 사용 ──
+    @PostMapping("/password")
+    public ApiResponse<?> changePassword(@AuthenticationPrincipal CrmUserDetails principal,
+                                          @RequestBody Map<String, String> body) {
+        String currentPassword = body.get("currentPassword");
+        String newPassword     = body.get("newPassword");
+        if (currentPassword == null || newPassword == null || newPassword.isBlank()) {
+            return ApiResponse.error("현재 비밀번호와 새 비밀번호를 모두 입력해주세요.");
+        }
+        if (newPassword.length() < 4) {
+            return ApiResponse.error("1차 비밀번호는 최소 4자리 이상이어야 합니다.");
+        }
+        CrmUser user = crmUserService.findById(principal.getId()).orElse(null);
+        if (user == null) return ApiResponse.error("사용자를 찾을 수 없습니다.");
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            return ApiResponse.error("현재 비밀번호가 올바르지 않습니다.");
+        }
+        crmUserService.updatePassword(user.getId(), passwordEncoder.encode(newPassword));
         return ApiResponse.ok();
     }
 

@@ -213,9 +213,14 @@ CS 티켓, 공지사항, CRM 쪽지함, 일별 통계 배치 등은 이제 로�
 상세 내역은 `docs/db.md`의 2026-07-15 항목들 참고.
 
 ### 2. 역할 기반 인가(Authorization) 미구현
-JWT에 `role`(super_admin/gym_admin/trainer) 클레임이 있고 `ROLE_xxx` GrantedAuthority까지 만들지만,
-`SecurityConfig`는 `anyRequest().authenticated()`뿐이라 실제로 역할을 검사하는 코드가 없다
-(`@PreAuthorize`/`hasRole` 등 전체 코드베이스에 0건). 로그인만 하면 역할 무관하게 모든 API 호출 가능.
+JWT에 `role`(super_admin/gym_admin/trainer/manager/employee) 클레임이 있고 `ROLE_xxx`
+GrantedAuthority까지 만들지만, `SecurityConfig`는 `anyRequest().authenticated()`뿐이라
+`@PreAuthorize`/`hasRole` 같은 진짜 역할 검사는 코드베이스에 없다. 로그인만 하면 역할 무관하게
+모든 API 호출 가능 — **단, `employee` role 하나만 예외**: `LockedCategoryInterceptor`가
+role을 직접 확인해서 `LockableCategories` 전체를 하드코딩으로 차단한다(2026-08-24, 아래
+"매니저/직원 계정" 항목 참고). Spring Security의 역할 기반 인가는 여전히 미구현이고, 이건
+그 인터셉터 하나에 한정된 별도의 임시방편 차단이다 — 다른 곳에 role 검사를 추가하고 싶으면
+이 인터셉터를 참고하되, 진짜 `hasRole` 기반 인가가 필요해지면 별도로 설계해야 함.
 
 ### 3. 지점(gym) 스코핑이 일부 컨트롤러에서만 적용됨
 `Crm*Mapper` 계열(2026-06-08 이후 작성분)은 쿼리에 `gym_id` 필터가 있지만, `MemberApiController`/
@@ -260,15 +265,21 @@ JWT에 `role`(super_admin/gym_admin/trainer) 클레임이 있고 `ROLE_xxx` Gran
   1차는 최소 4자리, 2차는 영문+숫자+특수문자 혼합 최소 8자리(대소문자 무관, 정규식
   `^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$`) — 검증 실패 시 에러, 성공 시
   `password_hash`/`second_password_hash`/`must_change_password=0`을 한 UPDATE로 원자적으로 갱신.
-  이미 완료된 계정이 다시 호출하면 거부(이 엔드포인트는 최초 1회 전용 — 이후 비밀번호 변경은
-  기존 "2차 비밀번호 변경"(`/api/auth/second-password`)과는 별도로, 1차 비밀번호만 다시 바꾸는
-  일반 기능은 아직 없음, 필요시 별도 요청).
+  이미 완료된 계정이 다시 호출하면 거부(이 엔드포인트는 최초 1회 전용).
 - 실제 로그인(`admin/linkonfit`) → `/dashboard` 리다이렉트 → `/api/dashboard/**` 423 →
   `POST /api/auth/change-password-first` 검증 실패 3종 + 성공 → 플래그 해제 후 `/dashboard`
   정상 접근 → 새 1차 비밀번호로 재로그인까지 end-to-end 실제 호출로 검증함(테스트용 지점
   LF99는 검증 후 삭제).
 - 확인 시점 기존 gym_admin 계정 0건이라 소급 UPDATE는 하지 않음 — 이미 발급된 계정 중
   기본 비밀번호를 안 바꾼 게 있다면 개별적으로 플래그를 켜야 함(마이그레이션 파일 주석 참고).
+- **`/settings` 화면 — 온보딩 이후 1/2차 비밀번호 변경(2026-08-24)** — `change-password-first`는
+  최초 1회 전용이라, 온보딩을 마친 뒤 비밀번호를 또 바꾸고 싶으면 방법이 없던 문제를 메움.
+  `POST /api/auth/password`(신규, 1차 비밀번호만 변경, 최소 4자리) +
+  `POST /api/auth/second-password`(기존 엔드포인트에 검증 강화 — 이전엔 빈 값만 아니면 통과했는데,
+  이제 `change-password-first`와 동일한 정규식으로 2차 비밀번호 형식을 강제함). `settings.html`의
+  "보안" 카드에 1차/2차 변경 폼을 나란히 둠. 로컬에서 오답/성공 케이스 실제 호출 + 변경된
+  1차 비밀번호로 재로그인까지 검증함(테스트용으로 건드린 `admin` 계정의 비밀번호/2차 비밀번호는
+  검증 후 원래 상태로 복원).
 
 ### 4. 로그인 쿠키에 `Secure`/`SameSite` 미설정 + CSRF 전역 비활성
 `AuthApiController`에서 쿠키에 `HttpOnly`만 설정하고 `Secure`/`SameSite`는 없음. `SecurityConfig`도
@@ -315,6 +326,54 @@ CSRF를 전역 비활성화(`csrf.disable()`)한 상태라 브라우저 기본 �
 - 회원 등급(tier)·OT/PT 유형·담당 트레이너 지정, 헬스장 설정(`/settings`) 등 기존 기능
 
 **신규 기능 (2026-07 ~ 08)**
+- **관리자페이지 전용 계정 — 매니저/직원(2026-08-24)** — `/settings` "관리자페이지 계정 관리"
+  카드에서 지점 관리자가 직접 추가 CRM 로그인 계정을 만들 수 있다. `crm_users.role`에
+  `manager`/`employee` 추가(`docs/sql/crm_user_manager_employee_role_20260824.sql`).
+  - **매니저** — 관리자(gym_admin)와 동등한 권한. 코드상 역할별 접근 제한 자체가 없어서
+    (위 "알려진 이슈 2번" 참고) 별도 구현 없이 자동으로 동등해짐. 지점코드 발급 계정과
+    동일하게 `must_change_password=1`로 생성돼 최초 로그인 시 1/2차 비밀번호를 직접 설정.
+  - **직원** — `LockableCategories`에 정의된 2차 비밀번호 잠금 대상 카테고리 중 **대시보드만
+    예외**(2026-08-24 수정 — 처음엔 대시보드도 막았다가, 랜딩 화면이라 항상 보여야 한다는
+    요청으로 뺌)이고 나머지(회원/PT/재등록/출석/상품/피드백/상담/받은메시지함/CS/공지/직원
+    관리/CRM매출/매출/설정)는 영구적으로 볼 수 없다. `LockedCategoryInterceptor`가 role이
+    employee면 `category`가 "dashboard"가 아닌 한 `lockedCategorySet()`/언락 쿠키를 아예
+    확인하지 않고 항상 차단 — 본인이 2차 비밀번호를 설정하고 실제로 검증에 성공해도
+    해제되지 않는 것까지 실제로 확인함. 차단 시 메시지는 "권한이 없습니다."로 통일, 페이지
+    직접 접근 시 뜨는 안내 화면의 이동 링크는 이제 안전하게 `/dashboard`를 가리킴(예전엔
+    대시보드도 막혀있어서 `/lockers`로 대체했었음). 사이드바 쪽에서 막힌 메뉴를 아예 숨기는
+    처리는 아직 안 함(서버 차단은 완전하지만, 클릭 후 막히는 UX라 프론트 폴리싱 여지가 있음).
+  - `CrmUserMapper.insert()`에 `must_change_password` 컬럼을 추가했음 — 트레이너 승격 등
+    이 메서드를 쓰는 다른 경로도 함께 영향받으니 새 호출부 추가 시 주의.
+  - 계정 아이디 중복 확인은 `is_active` 무관하게 전체를 본다(`uq_crm_gym_username`이
+    비활성 계정에도 걸려있어서) — `existsByGymIdAndUsernameAnyStatus`.
+  - 실제 로그인 계정 생성 → 최초 로그인 강제 플로우 → 매니저 전체 접근/직원 전체 차단
+    (언락 쿠키 우회 시도 포함) → 비활성화 시 로그인 차단 → 재활성화까지 로컬에서 전부
+    실제 호출로 검증함(테스트 계정은 삭제).
+- **회원 일괄 등록(엑셀, 2026-08-24)** — 타사 헬스장 CRM에서 회원 정보를 이관해올 때 사용.
+  구독권/인앱 티켓 같은 앱 전용 데이터는 대상이 아니고, 순수 헬스장 정보(회원 기본정보 +
+  이용권(회원권/PT/그룹) + 락커 + 운동복)만 다룬다. 두 가지 설계(① 타사 엑셀 그대로 받아 파싱
+  vs ② 우리 템플릿 제공) 중 ②를 선택함 — 벤더마다 제각각인 포맷을 우리가 매번 파싱하는 것보다
+  포맷 하나만 관리하는 쪽이 유지보수 비용이 훨씬 낮다고 판단.
+  - `GET /api/members/import/template` — 헤더 21개 컬럼(A~U) + 예시 행 1개, 성별/회원권구분
+    컬럼엔 엑셀 드롭다운(데이터 유효성 검사) 적용.
+  - `POST /api/members/import` — 컬럼은 **헤더 텍스트가 아니라 위치(A~U)로 파싱**한다(사용자가
+    헤더 문구를 바꿔도 안전하게 동작). 행 단위로 이름+연락처 중복(`existsByNameAndPhone`) 검사
+    후 회원 생성, 이용권/락커/운동복은 각각 독립적으로 시도 — **회원 생성만 성공하면 이후
+    단계가 일부 실패해도 그 행은 `success:true`로 보고한다**(재업로드 시 "이미 존재"로 막혀
+    다시 시도할 방법이 없어지는 것을 방지, 실패한 항목은 회원 상세정보에서 수동으로 이어서
+    등록). 완전 실패(이름/연락처 누락, 중복)만 `success:false`.
+  - `MemberMapper.insertMembership()`을 `MemberService.addMembership()`(오늘 날짜 기준으로
+    기간을 새로 계산하는 "신규 구매" 흐름)이 아니라 **직접** 호출한다 — 이관 데이터는 과거에
+    이미 정해진 시작/종료일을 그대로 보존해야 하기 때문. PT는 종료일이 없으면
+    `MyBatisMemberService.DEFAULT_UNLIMITED_DURATION_DAYS`와 동일한 3650일 무기한 처리를
+    자체 상수로 복제.
+  - 락커는 락커 **번호**만으로 매칭한다(구역까지는 못 맞춤) — `LockerMapper.findAvailableByGymAndNumber`
+    로 해당 지점에서 그 번호의 미배정 라커를 찾고, 없거나 이미 배정돼 있으면 그 항목만 건너뛴다.
+  - 담당 트레이너는 이름 텍스트로 받되 **자동 매칭하지 않는다** — 우리 트레이너 계정과 자동
+    연결할 근거가 없어, 안내 메시지만 남기고 상세정보 화면에서 수동 지정하도록 함.
+  - 실사용 시나리오(정상행/최소필드행/PT행/잘못된 값/필수값 누락/중복 재업로드)로 로컬에서
+    실제 업로드 테스트 완료 — 처음엔 PT 행에서 `end_date NOT NULL` 제약 위반이 났었는데(PT는
+    종료일 없이 올 수 있다는 걸 놓침) 위 무기한 처리로 수정 후 재확인함.
 - **라커 관리(`/lockers`)** — 헬스장당 여러 구역(zone) 신설, 구역별 독립된 가로×세로 배치와 라커 번호
   자동 생성(세로 최대 10칸), 회원 배정은 기존 상품/결제(membership) 흐름 재사용, 그리드는 가로/세로
   각 20칸 타일 단위 페이지네이션
@@ -442,8 +501,12 @@ gradlew.bat bootRun
 | `POST /api/auth/login` | AuthApiController | JWT 로그인 |
 | `POST /api/auth/logout` | AuthApiController | 쿠키 삭제 로그아웃 |
 | `POST /api/auth/change-password-first` | AuthApiController | 최초 로그인 강제 변경(1차+2차 비밀번호 동시 설정) — `must_change_password` 계정 전용 |
+| `POST /api/auth/password` | AuthApiController | 1차(로그인) 비밀번호 변경 — 설정 화면, 온보딩 이후 상시 사용 |
 | `/api/dashboard/**` | DashboardApiController | 통계 (members/classes/attendance/revenue/consults/crm-summary) |
 | `/api/members/**` | MemberApiController | 회원 CRUD, 상태·등급·유형 변경, 티켓 조회·충전, 메모·태그, 트레이너 지정 |
+| `GET /api/members/import/template` | MemberApiController | 회원 일괄 등록용 엑셀 템플릿 다운로드 |
+| `POST /api/members/import` | MemberApiController | 타사 CRM 이관 — 템플릿 엑셀 업로드로 회원+이용권/락커/운동복 일괄 등록 |
+| `/api/crm-accounts/**` | CrmAccountApiController | 관리자페이지 전용 계정(매니저/직원) 목록·생성·활성화 토글 |
 | `/api/staff/**` | StaffApiController | 직원 CRUD, 역할 변경, 대시보드, 담당 회원 |
 | `/api/classes/**` | ClassApiController | 수업 CRUD, 신청자 관리 |
 | `/api/attendance/**` | AttendanceApiController | 출석 체크, 현황 조회, 유증 목록, 추이 |

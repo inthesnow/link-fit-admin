@@ -56,13 +56,38 @@
 
     <insert id="insert">
         INSERT INTO crm_users
-            (id, gym_id, app_user_id, name, email, username, password_hash, role, is_active)
+            (id, gym_id, app_user_id, name, email, username, password_hash, role, is_active, must_change_password)
         VALUES
-            (#{id}, #{gymId}, #{appUserId}, #{name}, #{email}, #{username}, #{passwordHash}, #{role}, #{active})
+            (#{id}, #{gymId}, #{appUserId}, #{name}, #{email}, #{username}, #{passwordHash}, #{role}, #{active}, #{mustChangePassword})
     </insert>
+
+    <!-- 지점 관리자가 lof-admin 내에서 직접 만드는 매니저/직원 계정 목록 -->
+    <select id="findByGymIdAndRoles" resultMap="crmUserResultMap">
+        SELECT cu.*, g.branch_code
+        FROM crm_users cu
+        JOIN gym g ON cu.gym_id = g.id
+        WHERE cu.gym_id = #{gymId}
+          AND cu.role IN
+          <foreach collection="roles" item="r" open="(" separator="," close=")">#{r}</foreach>
+        ORDER BY cu.created_at DESC
+    </select>
+
+    <update id="updateActive">
+        UPDATE crm_users SET is_active = #{active} WHERE id = #{id} AND gym_id = #{gymId}
+    </update>
+
+    <!-- uq_crm_gym_username은 is_active와 무관하게 걸려있어(비활성 계정도 유니크 제약 대상),
+         활성 계정만 보는 findByGymIdAndUsername과 별도로 전체를 대상으로 사전 확인한다 -->
+    <select id="existsByGymIdAndUsernameAnyStatus" resultType="boolean">
+        SELECT COUNT(*) > 0 FROM crm_users WHERE gym_id = #{gymId} AND username = #{username}
+    </select>
 
     <update id="updateSecondPassword">
         UPDATE crm_users SET second_password_hash = #{secondPasswordHash} WHERE id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        UPDATE crm_users SET password_hash = #{passwordHash} WHERE id = #{id}
     </update>
 
     <update id="completeFirstLogin">

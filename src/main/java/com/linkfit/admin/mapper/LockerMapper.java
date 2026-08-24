@@ -30,4 +30,9 @@ public interface LockerMapper {
     List<Locker> findAllByZone(@Param("zoneId") Long zoneId);
 
     Optional<Locker> findById(@Param("id") Long id);
+
+    // 회원 일괄 등록(엑셀 임포트) 시 락커번호만으로 배정 대상 라커를 찾기 위함.
+    // 여러 구역에 같은 번호가 있을 수 있어 List로 받고, 서비스단에서 미배정(membershipId=null)인
+    // 것 중 하나를 고른다.
+    List<Locker> findAvailableByGymAndNumber(@Param("gymId") Long gymId, @Param("lockerNumber") int lockerNumber);
 }

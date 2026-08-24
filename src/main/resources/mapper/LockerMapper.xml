@@ -76,4 +76,9 @@
         WHERE l.id = #{id}
     </select>
 
+    <select id="findAvailableByGymAndNumber" resultType="Locker">
+        <include refid="lockerSelect"/>
+        WHERE lz.gym_id = #{gymId} AND l.locker_number = #{lockerNumber}
+    </select>
+
 </mapper>

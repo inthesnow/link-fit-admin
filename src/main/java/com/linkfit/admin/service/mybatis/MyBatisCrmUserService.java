@@ -32,6 +32,11 @@ public class MyBatisCrmUserService implements CrmUserService {
     }
 
     @Override
+    public void updatePassword(String id, String passwordHash) {
+        crmUserMapper.updatePassword(id, passwordHash);
+    }
+
+    @Override
     public void updateLockedCategories(String id, String lockedCategories) {
         crmUserMapper.updateLockedCategories(id, lockedCategories);
     }

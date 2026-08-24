@@ -5,17 +5,23 @@ import com.linkfit.admin.domain.CrmMemberNote;
 import com.linkfit.admin.domain.CrmMemberTag;
 import com.linkfit.admin.domain.Member;
 import com.linkfit.admin.domain.MemberTicket;
+import com.linkfit.admin.domain.Staff;
 import com.linkfit.admin.domain.TicketLog;
 import com.linkfit.admin.security.CrmUserDetails;
 import com.linkfit.admin.service.CrmMemberService;
+import com.linkfit.admin.service.MemberImportService;
 import com.linkfit.admin.service.MemberService;
+import com.linkfit.admin.service.StaffService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.time.LocalDate;
@@ -32,10 +38,29 @@ public class MemberApiController {
 
     private final MemberService memberService;
     private final CrmMemberService crmMemberService;
+    private final StaffService staffService;
+    private final MemberImportService memberImportService;
 
-    public MemberApiController(MemberService memberService, CrmMemberService crmMemberService) {
+    public MemberApiController(MemberService memberService, CrmMemberService crmMemberService,
+                                StaffService staffService, MemberImportService memberImportService) {
         this.memberService    = memberService;
         this.crmMemberService = crmMemberService;
+        this.staffService     = staffService;
+        this.memberImportService = memberImportService;
+    }
+
+    // 회원 상세정보의 "담당 트레이너 변경" 드롭다운 전용 — /api/staff는 "staff"(직원 관리)
+    // 카테고리로 2차 비밀번호 잠금 대상이라, 회원관리("members" 카테고리)만 잠금 해제한
+    // 관리자가 회원 상세에서 트레이너를 배정하려 하면 423으로 막히는 문제가 있었음
+    // (직원 관리를 잠근 계정에서 실제로 재현 확인함). id/name만 내려주는 최소 정보 엔드포인트를
+    // members 카테고리 하위에 따로 둬서 우회.
+    @GetMapping("/trainer-options")
+    public ApiResponse<List<Map<String, String>>> trainerOptions() {
+        List<Staff> trainers = staffService.findAll("TRAINER", 0, 200);
+        List<Map<String, String>> options = trainers.stream()
+                .map(t -> Map.of("id", t.getId(), "name", t.getName() != null ? t.getName() : t.getId()))
+                .toList();
+        return ApiResponse.ok(options);
     }
 
     @GetMapping
@@ -301,6 +326,35 @@ public class MemberApiController {
                 row.createCell(10).setCellValue(m.getTier()        != null ? m.getTier()                 : "");
             }
             wb.write(response.getOutputStream());
+        }
+    }
+
+    // ── 회원 일괄 등록(엑셀) — 타사 CRM에서 이관해오는 순수 헬스장 정보 전용 ──
+    @GetMapping("/import/template")
+    public ResponseEntity<byte[]> importTemplate() {
+        log.info("[Member] GET /api/members/import/template");
+        byte[] bytes = memberImportService.generateTemplate();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"member-import-template.xlsx\"")
+                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
+    }
+
+    @PostMapping("/import")
+    public ApiResponse<List<Map<String, Object>>> importMembers(
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] POST /api/members/import - filename={}, size={}", file.getOriginalFilename(), file.getSize());
+        if (file.isEmpty()) {
+            return ApiResponse.error("업로드할 파일을 선택해주세요.");
+        }
+        try {
+            List<Map<String, Object>> results = memberImportService.importExcel(file.getInputStream(), principal.getGymId());
+            return ApiResponse.ok(results);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        } catch (IOException e) {
+            return ApiResponse.error("파일을 읽을 수 없습니다.");
         }
     }
 

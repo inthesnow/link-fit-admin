@@ -73,6 +73,10 @@
                 <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 엑셀 내보내기
             </button>
+            <button class="btn btn-secondary" onclick="openImportModal()" style="font-size:12px">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z" transform="rotate(180 12 12)"/></svg>
+                회원 일괄 등록
+            </button>
             <button class="btn btn-primary" onclick="openModal()">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
                 회원 등록
@@ -217,6 +221,55 @@
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeModal()">취소</button>
             <button class="btn btn-primary" onclick="saveMember()">저장</button>
+        </div>
+    </div>
+</div>
+
+<!-- 회원 일괄 등록 모달 (타사 CRM 이관용) -->
+<div class="modal-overlay" id="importModal">
+    <div class="modal" style="max-width:640px">
+        <div class="modal-header">
+            <span class="modal-title">회원 일괄 등록</span>
+            <button class="modal-close" onclick="closeImportModal()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p style="font-size:13px;color:var(--text-secondary);line-height:1.6;margin:0 0 16px">
+                타사 헬스장 관리 프로그램에서 회원 정보를 옮겨올 때 사용합니다. 구독권/인앱 티켓 등
+                앱 전용 정보는 대상이 아니며, 회원 기본정보 · 이용권(회원권/PT/그룹) · 락커 · 운동복만
+                등록됩니다. 먼저 템플릿을 내려받아 정해진 양식대로 채운 뒤 업로드해주세요.
+            </p>
+            <button class="btn btn-secondary" onclick="downloadImportTemplate()" style="margin-bottom:16px">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" style="vertical-align:-2px;margin-right:4px"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                템플릿 다운로드
+            </button>
+            <div class="form-group full">
+                <label class="form-label">채운 엑셀 파일 업로드</label>
+                <input type="file" class="form-input" id="importFile" accept=".xlsx">
+            </div>
+            <div id="importErr" style="color:var(--error);font-size:12px;display:none;margin-top:8px"></div>
+            <div id="importResultWrap" style="display:none;margin-top:16px">
+                <div id="importSummary" style="font-size:13px;font-weight:600;margin-bottom:8px"></div>
+                <div class="table-wrap" style="max-height:320px;overflow-y:auto">
+                    <table>
+                        <thead>
+                        <tr>
+                            <th style="width:50px">행</th>
+                            <th style="width:100px">이름</th>
+                            <th style="width:120px">연락처</th>
+                            <th style="width:70px">결과</th>
+                            <th>상세</th>
+                        </tr>
+                        </thead>
+                        <tbody id="importResultBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeImportModal()">닫기</button>
+            <button class="btn btn-primary" id="importSubmitBtn" onclick="submitImport()">업로드</button>
         </div>
     </div>
 </div>
@@ -546,10 +599,17 @@ function resetExtraFilters() {
 // ── 담당 트레이너 필터 (다중 선택) ────────────────────────────
 async function loadTrainerList() {
     try {
-        const res  = await fetch('/api/staff?role=TRAINER&size=200');
+        // /api/staff는 "직원 관리" 카테고리(2차 비밀번호 잠금 대상)라, 회원관리 화면(이 페이지)에서
+        // 호출하면 그 카테고리가 잠긴 관리자에게 423이 떨어진다. 회원관리 카테고리 하위의
+        // 전용 엔드포인트(id/name만 반환)를 대신 사용한다.
+        const res  = await fetch('/api/members/trainer-options');
+        if (!res.ok) { console.error('[trainerList] /api/members/trainer-options HTTP', res.status); return; }
         const json = await res.json();
-        trainerList = (json.data?.staff || []).map(s => ({ id: s.id, name: s.name || s.id }));
-    } catch (e) {}
+        if (!json.success) { console.error('[trainerList] /api/members/trainer-options error', json.message); return; }
+        trainerList = (json.data || []).map(s => ({ id: s.id, name: s.name || s.id }));
+    } catch (e) {
+        console.error('[trainerList] /api/members/trainer-options 요청 실패', e);
+    }
 }
 
 function toggleTrainerDropdown() {
@@ -725,6 +785,73 @@ async function saveMember() {
     if (!res.ok || !json.success) { alert(json.message || '저장에 실패했습니다.'); return; }
     closeModal();
     loadMembers();
+}
+
+function openImportModal() {
+    document.getElementById('importFile').value = '';
+    document.getElementById('importErr').style.display = 'none';
+    document.getElementById('importResultWrap').style.display = 'none';
+    document.getElementById('importResultBody').innerHTML = '';
+    document.getElementById('importModal').classList.add('open');
+}
+function closeImportModal() {
+    document.getElementById('importModal').classList.remove('open');
+    loadMembers();
+}
+function downloadImportTemplate() {
+    window.location.href = '/api/members/import/template';
+}
+
+async function submitImport() {
+    const fileInput = document.getElementById('importFile');
+    const errEl = document.getElementById('importErr');
+    errEl.style.display = 'none';
+    if (!fileInput.files.length) {
+        errEl.textContent = '업로드할 파일을 선택해주세요.';
+        errEl.style.display = '';
+        return;
+    }
+    const btn = document.getElementById('importSubmitBtn');
+    btn.disabled = true;
+    btn.textContent = '업로드 중...';
+    try {
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        const res = await fetch('/api/members/import', { method: 'POST', body: formData });
+        const json = await res.json();
+        if (!json.success) {
+            errEl.textContent = json.message || '업로드에 실패했습니다.';
+            errEl.style.display = '';
+            return;
+        }
+        renderImportResult(json.data);
+    } catch (e) {
+        errEl.textContent = '서버에 연결할 수 없습니다.';
+        errEl.style.display = '';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '업로드';
+    }
+}
+
+function renderImportResult(rows) {
+    const wrap = document.getElementById('importResultWrap');
+    const summary = document.getElementById('importSummary');
+    const tbody = document.getElementById('importResultBody');
+    const successCount = rows.filter(r => r.success).length;
+    summary.textContent = `총 ${rows.length}건 중 ${successCount}건 성공, ${rows.length - successCount}건 실패`;
+    tbody.innerHTML = rows.map(r => `
+        <tr>
+            <td>${r.row}</td>
+            <td>${escHtml(r.name || '')}</td>
+            <td>${escHtml(r.phone || '')}</td>
+            <td>${r.success
+                ? '<span class="badge badge-active">성공</span>'
+                : '<span class="badge badge-expired">실패</span>'}</td>
+            <td style="font-size:12px;color:var(--text-secondary)">${(r.messages || []).map(escHtml).join('<br>')}</td>
+        </tr>
+    `).join('');
+    wrap.style.display = '';
 }
 
 function exportMembers() {
@@ -1284,10 +1411,14 @@ async function saveTicket() {
 async function renderAssignedTrainerPane() {
     if (!trainerList.length) await loadTrainerList();
     const sel = document.getElementById('trainerSelect');
-    sel.innerHTML = '<option value="">미지정</option>' +
-        trainerList.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
-    const currentId = detailMemberData?.trainerId || '';
-    sel.value = currentId;
+    if (!trainerList.length) {
+        sel.innerHTML = '<option value="">등록된 트레이너가 없습니다 (직원 관리에서 먼저 트레이너 지정 필요)</option>';
+    } else {
+        sel.innerHTML = '<option value="">미지정</option>' +
+            trainerList.map(t => `<option value="${t.id}">${escHtml(t.name)}</option>`).join('');
+        const currentId = detailMemberData?.trainerId || '';
+        sel.value = currentId;
+    }
     document.getElementById('trainerCurrentName').textContent = detailMemberData?.trainerName || '미지정';
 }
 
