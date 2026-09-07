@@ -72,7 +72,7 @@ public interface MemberMapper {
     // 활성 회원 전체(ONE_POINT/FEEDBACK/PHOTO/VIDEO) 잔량 합계 — {onePoint, feedback, photo, video}
     Map<String, Object> ticketTotals(@Param("gymId") Long gymId);
     void upsertTicket(@Param("userId") String userId, @Param("ticketType") String ticketType,
-                      @Param("amount") int amount);
+                      @Param("amount") int amount, @Param("gymId") Long gymId);
     void insertTicketLog(@Param("userId") String userId, @Param("ticketType") String ticketType,
                          @Param("actionType") String actionType, @Param("description") String description);
 

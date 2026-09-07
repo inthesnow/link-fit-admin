@@ -409,9 +409,12 @@
         SELECT remaining FROM member_tickets WHERE user_id = #{userId} AND ticket_type = #{ticketType}
     </select>
 
+    <!-- member_tickets.gym_id는 NOT NULL(FK: gym.id) — 관리자가 로그인한 지점을 그대로 귀속시킨다
+         (insertMembership과 동일한 패턴). 2026-09-07, gym_id 백필 이후 이 INSERT가 gym_id를
+         채우지 않아 신규 티켓 타입 지급이 전부 실패하던 회귀를 발견해 수정. -->
     <insert id="upsertTicket">
-        INSERT INTO member_tickets (user_id, ticket_type, remaining)
-        VALUES (#{userId}, #{ticketType}, GREATEST(0, #{amount}))
+        INSERT INTO member_tickets (user_id, ticket_type, remaining, gym_id)
+        VALUES (#{userId}, #{ticketType}, GREATEST(0, #{amount}), #{gymId})
         ON DUPLICATE KEY UPDATE remaining = GREATEST(0, remaining + #{amount})
     </insert>
 

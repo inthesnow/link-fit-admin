@@ -320,9 +320,9 @@ public class MyBatisMemberService implements MemberService {
 
     @Override
     @Transactional
-    public void chargeTicket(String id, String ticketType, int amount, String description) {
+    public void chargeTicket(String id, String ticketType, int amount, String description, Long gymId) {
         int before = Optional.ofNullable(memberMapper.findTicketRemaining(id, ticketType)).orElse(0);
-        memberMapper.upsertTicket(id, ticketType, amount);
+        memberMapper.upsertTicket(id, ticketType, amount, gymId);
         int after = Optional.ofNullable(memberMapper.findTicketRemaining(id, ticketType)).orElse(0);
         int actualDelta = after - before;
 

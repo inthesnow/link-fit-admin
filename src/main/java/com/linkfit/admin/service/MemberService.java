@@ -31,7 +31,7 @@ public interface MemberService {
     void addMembership(Membership membership, Long gymId);
     List<MemberTicket> findTickets(String id);
     java.util.Map<String, Object> ticketTotals(Long gymId);
-    void chargeTicket(String id, String ticketType, int amount, String description);
+    void chargeTicket(String id, String ticketType, int amount, String description, Long gymId);
     List<TicketLog> findTicketLogs(Long gymId, String ticketType, String keyword, int page, int size);
     long countTicketLogs(Long gymId, String ticketType, String keyword);
 

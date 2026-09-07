@@ -228,7 +228,8 @@ public class MemberApiController {
     }
 
     @PostMapping("/{id}/tickets/charge")
-    public ApiResponse<Void> chargeTicket(@PathVariable String id, @RequestBody Map<String, Object> body) {
+    public ApiResponse<Void> chargeTicket(@PathVariable String id, @RequestBody Map<String, Object> body,
+                                           @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Member] POST /api/members/{id}/tickets/charge - id={}", id);
         String ticketType  = (String) body.get("ticketType");
         Object rawAmount   = body.get("amount");
@@ -237,7 +238,7 @@ public class MemberApiController {
         }
         int amount          = ((Number) rawAmount).intValue();
         String description = (String) body.get("description");
-        memberService.chargeTicket(id, ticketType, amount, description);
+        memberService.chargeTicket(id, ticketType, amount, description, principal.getGymId());
         return ApiResponse.ok();
     }
 
