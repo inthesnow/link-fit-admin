@@ -5,9 +5,11 @@ import com.linkfit.admin.domain.MemberTicket;
 import com.linkfit.admin.domain.Membership;
 import com.linkfit.admin.domain.TicketLog;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 public interface MemberService {
+    Map<String, Object> summaryCounts(Long gymId);
     List<Member> findAll(String keyword, String status, String tier, Long gymId, List<String> trainerIds,
                           Integer minDaysLeft, Integer maxDaysLeft, Integer minPtRemaining, Integer minAbsentDays,
                           int page, int size);
@@ -25,7 +27,7 @@ public interface MemberService {
     void updateAssignedTrainer(String id, String trainerId, Long gymId);
     void freeze(String id, String startDate, String endDate, Long gymId);
     void withdraw(String id, Long gymId);
-    List<Membership> findMemberships(String id);
+    List<Membership> findMemberships(String id, Long gymId);
     void addMembership(Membership membership, Long gymId);
     List<MemberTicket> findTickets(String id);
     java.util.Map<String, Object> ticketTotals(Long gymId);
@@ -40,6 +42,6 @@ public interface MemberService {
 
     // 이용권/락커/운동복 회수. 금액 이전 + PT 세션 환원 + 삭제가 한 트랜잭션으로 묶여야
     // 중간에 실패해도 금액이 중복되거나 유실되지 않는다.
-    void deleteMembership(Long id);
-    void deleteMembershipsByPackage(String memberId, Long packageId);
+    void deleteMembership(Long id, Long gymId);
+    void deleteMembershipsByPackage(String memberId, Long packageId, Long gymId);
 }

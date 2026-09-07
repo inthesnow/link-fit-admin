@@ -20,12 +20,20 @@
             </button>
             <h1 class="page-title">헬스장 가입 승인</h1>
         </div>
+        <div class="header-right">
+            <button class="btn btn-secondary" onclick="exportList()" style="font-size:12px">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                엑셀 내보내기
+            </button>
+        </div>
     </header>
 
     <!-- 요약 카드 -->
     <div style="display:flex;gap:12px;padding:16px 24px;flex-wrap:wrap" id="summaryCards">
         <div class="summary-card" id="sc-pending"><div class="sc-val">-</div><div class="sc-label">승인 대기</div></div>
-        <div class="summary-card success" id="sc-approved"><div class="sc-val">-</div><div class="sc-label">승인됨</div></div>
+        <div class="summary-card success" id="sc-approved" title="앱 회원가입까지 완료한 사람만 집계(CRM 등록만 된 회원 제외)">
+            <div class="sc-val">-</div><div class="sc-label">승인됨 (앱가입)</div>
+        </div>
         <div class="summary-card error" id="sc-rejected"><div class="sc-val">-</div><div class="sc-label">거절됨</div></div>
     </div>
 
@@ -148,12 +156,19 @@ function fmtDatetime(s) {
 async function loadSummary() {
     const [p, a, r] = await Promise.all([
         fetch('/api/gym-join-requests?status=PENDING&page=0&size=1').then(r => r.json()),
-        fetch('/api/gym-join-requests?status=APPROVED&page=0&size=1').then(r => r.json()),
+        fetch('/api/gym-join-requests/approved-app-count').then(r => r.json()),
         fetch('/api/gym-join-requests?status=REJECTED&page=0&size=1').then(r => r.json())
     ]);
     document.getElementById('sc-pending').querySelector('.sc-val').textContent  = p.data?.total ?? 0;
-    document.getElementById('sc-approved').querySelector('.sc-val').textContent = a.data?.total ?? 0;
+    document.getElementById('sc-approved').querySelector('.sc-val').textContent = a.data ?? 0;
     document.getElementById('sc-rejected').querySelector('.sc-val').textContent = r.data?.total ?? 0;
+}
+
+function exportList() {
+    const status = document.getElementById('statusFilter').value;
+    const params = new URLSearchParams();
+    if (status !== '') params.set('status', status);
+    window.location.href = `/api/gym-join-requests/export?${params}`;
 }
 
 async function loadList() {

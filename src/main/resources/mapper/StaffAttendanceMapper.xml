@@ -16,7 +16,8 @@
 
     <!--
         오늘 출근 현황: 전체 TRAINER LEFT JOIN 오늘 출근 기록
-        출근 기록이 없으면 id=NULL → 미출근으로 구분
+        출근 기록이 없으면 id=NULL → 미출근으로 구분. 트레이너는 users 기준으로 목록을 만들고
+        (users엔 gym_id가 없어) user_gym으로 소속 지점만 필터링.
     -->
     <select id="findTodayStatus" resultMap="saResultMap">
         SELECT
@@ -30,6 +31,7 @@
             sa.created_at
         FROM users u
         LEFT JOIN user_profiles up ON up.user_id = u.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         LEFT JOIN staff_attendance sa
                ON sa.user_id = u.user_id
               AND sa.attend_date = #{today}
@@ -52,26 +54,27 @@
         FROM staff_attendance sa
         LEFT JOIN user_profiles up ON up.user_id = sa.user_id
         WHERE sa.attend_date BETWEEN #{startDate} AND #{endDate}
+          AND sa.gym_id = #{gymId}
         <if test="userId != null and userId != ''">
             AND sa.user_id = #{userId}
         </if>
         ORDER BY sa.attend_date DESC, sa.check_in ASC
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO staff_attendance (user_id, attend_date, check_in, memo)
-        VALUES (#{userId}, #{attendDate}, #{checkIn}, #{memo})
+    <insert id="insert" useGeneratedKeys="true" keyProperty="sa.id">
+        INSERT INTO staff_attendance (user_id, attend_date, check_in, memo, gym_id)
+        VALUES (#{sa.userId}, #{sa.attendDate}, #{sa.checkIn}, #{sa.memo}, #{gymId})
         ON DUPLICATE KEY UPDATE
-            check_in = COALESCE(#{checkIn}, check_in),
-            memo     = COALESCE(#{memo}, memo)
+            check_in = COALESCE(#{sa.checkIn}, check_in),
+            memo     = COALESCE(#{sa.memo}, memo)
     </insert>
 
     <update id="updateCheckOut">
-        UPDATE staff_attendance SET check_out = #{checkOut} WHERE id = #{id}
+        UPDATE staff_attendance SET check_out = #{checkOut} WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <delete id="delete">
-        DELETE FROM staff_attendance WHERE id = #{id}
+        DELETE FROM staff_attendance WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
 </mapper>

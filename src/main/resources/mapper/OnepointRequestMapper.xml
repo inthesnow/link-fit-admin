@@ -20,6 +20,7 @@
         <result property="createdAt"      column="created_at"/>
     </resultMap>
 
+    <!-- onepoint_requests엔 gym_id가 없어(회원-트레이너 매칭 시점 스냅샷) member_id로 user_gym 조인 -->
     <select id="findAll" resultMap="opResultMap">
         SELECT op.id, op.member_id, op.trainer_id,
                op.preferred_dates, op.body_parts, op.has_pain, op.notes,
@@ -30,6 +31,7 @@
         FROM onepoint_requests op
         LEFT JOIN user_profiles mp ON op.member_id  = mp.user_id
         LEFT JOIN user_profiles tp ON op.trainer_id = tp.user_id
+        JOIN user_gym ug ON ug.user_id = op.member_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         <where>
             <if test="status != null and status != ''">AND op.status = #{status}</if>
         </where>
@@ -38,9 +40,10 @@
     </select>
 
     <select id="count" resultType="long">
-        SELECT COUNT(*) FROM onepoint_requests
+        SELECT COUNT(*) FROM onepoint_requests op
+        JOIN user_gym ug ON ug.user_id = op.member_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         <where>
-            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="status != null and status != ''">AND op.status = #{status}</if>
         </where>
     </select>
 
@@ -48,6 +51,8 @@
         UPDATE onepoint_requests
         SET status = #{status}, note = #{note}
         WHERE id = #{id}
+          AND EXISTS (SELECT 1 FROM user_gym ug WHERE ug.user_id = onepoint_requests.member_id
+                        AND ug.gym_id = #{gymId} AND ug.is_active = 1)
     </update>
 
 </mapper>

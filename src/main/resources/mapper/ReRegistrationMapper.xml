@@ -88,10 +88,11 @@
         <include refid="expiryFilter"/>
     </select>
 
+    <!-- 대상자 = 예정자 + 만료(목록의 만료상태 배지와 동일 기준, expiryFilter 참고) -->
     <select id="summaryByMembership" resultType="map">
         SELECT
-            COUNT(*) AS target,
-            SUM(CASE WHEN me.end_date >= CURDATE() THEN 1 ELSE 0 END) AS completed,
+            SUM(CASE WHEN me.end_date IS NOT NULL AND me.end_date &gt;= CURDATE()
+                       AND DATEDIFF(me.end_date, CURDATE()) &lt;= 30 THEN 1 ELSE 0 END) AS expiring,
             SUM(CASE WHEN me.end_date IS NULL OR me.end_date &lt; CURDATE() THEN 1 ELSE 0 END) AS expired
           FROM crm_re_registration r
           LEFT JOIN (
@@ -102,7 +103,7 @@
 
     <select id="findById" resultMap="reRegMap">
         <include refid="baseJoin"/>
-         WHERE r.id = #{id} LIMIT 1
+         WHERE r.id = #{id} AND r.gym_id = #{gymId} LIMIT 1
     </select>
 
     <insert id="insert" parameterType="com.linkfit.admin.domain.ReRegistration">
@@ -111,22 +112,11 @@
         VALUES (#{id}, #{memberId}, #{gymId}, #{reason}, #{status}, #{assignedTo}, #{memo}, #{scheduledAt}, NOW())
     </insert>
 
-    <update id="updateStatus">
-        UPDATE crm_re_registration
-           SET status      = #{status},
-               resolved_at = CASE WHEN #{status} IN ('success','failed') THEN NOW() ELSE resolved_at END
-         WHERE id = #{id}
-    </update>
-
-    <update id="updateMemo">
-        UPDATE crm_re_registration SET memo = #{memo} WHERE id = #{id}
-    </update>
-
     <update id="assign">
         UPDATE crm_re_registration
            SET assigned_to = #{assignedTo},
                status      = CASE WHEN status = 'pending' THEN 'in_progress' ELSE status END
-         WHERE id = #{id}
+         WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <select id="existsByMemberAndReason" resultType="boolean">
@@ -148,5 +138,31 @@
          WHERE gym_id = #{gymId} AND status = #{status}
            AND created_at >= DATE_SUB(NOW(), INTERVAL #{days} DAY)
     </select>
+
+    <!-- ── 메모(스택형) ──────────────────────────────────────── -->
+    <resultMap id="reRegNoteMap" type="com.linkfit.admin.domain.CrmReregistrationNote">
+        <id     property="id"                column="id"/>
+        <result property="reregistrationId"  column="reregistration_id"/>
+        <result property="gymId"             column="gym_id"/>
+        <result property="authorId"          column="author_id"/>
+        <result property="authorName"        column="author_name"/>
+        <result property="content"           column="content"/>
+        <result property="createdAt"         column="created_at"/>
+    </resultMap>
+
+    <select id="findNotesByReregistrationId" resultMap="reRegNoteMap">
+        SELECT n.id, n.reregistration_id, n.gym_id, n.author_id, n.content, n.created_at,
+               u.name AS author_name
+          FROM crm_reregistration_notes n
+          LEFT JOIN crm_users u ON u.id = n.author_id
+         WHERE n.reregistration_id = #{reregistrationId}
+           AND n.gym_id            = #{gymId}
+         ORDER BY n.created_at DESC
+    </select>
+
+    <insert id="insertNote" parameterType="com.linkfit.admin.domain.CrmReregistrationNote">
+        INSERT INTO crm_reregistration_notes (id, reregistration_id, gym_id, author_id, content, created_at)
+        VALUES (#{id}, #{reregistrationId}, #{gymId}, #{authorId}, #{content}, NOW())
+    </insert>
 
 </mapper>

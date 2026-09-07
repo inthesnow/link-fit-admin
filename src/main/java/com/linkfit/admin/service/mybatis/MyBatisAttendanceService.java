@@ -20,9 +20,9 @@ public class MyBatisAttendanceService implements AttendanceService {
     }
 
     @Override
-    public List<Attendance> findAll(String date, String period) {
+    public List<Attendance> findAll(String date, String period, Long gymId) {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
-        return attendanceMapper.findAll(d, period);
+        return attendanceMapper.findAll(d, period, gymId);
     }
 
     @Override
@@ -31,21 +31,21 @@ public class MyBatisAttendanceService implements AttendanceService {
     }
 
     @Override
-    public Attendance checkIn(Attendance attendance) {
+    public Attendance checkIn(Attendance attendance, Long gymId) {
         if (attendance.getAttendDate() == null) attendance.setAttendDate(LocalDate.now());
-        attendanceMapper.checkIn(attendance);
+        attendanceMapper.checkIn(attendance, gymId);
         return attendance;
     }
 
     @Override
-    public void cancel(Long id) {
-        attendanceMapper.cancel(id);
+    public void cancel(Long id, Long gymId) {
+        attendanceMapper.cancel(id, gymId);
     }
 
     @Override
-    public List<Attendance> findFrozen(String date) {
+    public List<Attendance> findFrozen(String date, Long gymId) {
         String d = (date == null || date.isBlank()) ? LocalDate.now().toString() : date;
-        List<MemberFreeze> freezes = attendanceMapper.findFrozen(d);
+        List<MemberFreeze> freezes = attendanceMapper.findFrozen(d, gymId);
         return freezes.stream().map(f -> {
             Attendance a = new Attendance();
             a.setMemberId(f.getMemberId());

@@ -22,7 +22,7 @@ public class MustChangePasswordInterceptor implements HandlerInterceptor {
     private static final List<String> ALLOWED_PREFIXES = List.of(
             "/change-password-first", "/api/auth/change-password-first",
             "/api/auth/login", "/api/auth/logout",
-            "/css/", "/js/", "/favicon.svg", "/error"
+            "/css/", "/js/", "/image/", "/favicon.svg", "/error"
     );
 
     private final CrmUserService crmUserService;

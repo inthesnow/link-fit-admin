@@ -37,12 +37,16 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // 회원 상세정보 모달을 다른 CRM 페이지에서 iframe으로 재사용하기 위해 same-origin
+            // 프레이밍만 허용(기본값 DENY는 완전히 막아서 iframe이 안 뜸). 외부 사이트에서의
+            // 클릭재킹은 여전히 차단됨(같은 origin만 허용).
+            .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/login", "/api/auth/login", "/api/auth/logout",
-                    "/css/**", "/js/**", "/favicon.svg", "/error"
+                    "/css/**", "/js/**", "/image/**", "/favicon.svg", "/error"
                 ).permitAll()
                 // OPTIONS preflight 전체 허용 (CORS 사전 요청)
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()

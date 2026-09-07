@@ -11,21 +11,23 @@ import java.util.Optional;
 
 @Mapper
 public interface StaffMapper {
-    List<Staff> findAll(@Param("role") String role, @Param("offset") int offset, @Param("size") int size);
-    long count(@Param("role") String role);
-    Optional<Staff> findById(@Param("id") String id);
-    void update(Staff staff);
-    void updateRole(@Param("id") String id, @Param("role") String role);
-
-    // 이름+전화번호로 기존 앱 사용자를 찾아 트레이너로 승격시키는 흐름에서 사용 (역할 무관 조회)
-    Optional<Staff> findAppUserByNameAndPhone(@Param("name") String name, @Param("phone") String phone);
+    List<Staff> findAll(@Param("role") String role, @Param("offset") int offset, @Param("size") int size,
+                        @Param("gymId") Long gymId);
+    List<Staff> findTrainerOptions(@Param("gymId") Long gymId);
+    long count(@Param("role") String role, @Param("gymId") Long gymId);
+    Optional<Staff> findById(@Param("id") String id, @Param("gymId") Long gymId);
+    // 트레이너 등록용 회원 검색 — 이 지점에 승인된(user_gym) 회원 중 이름이 일치하는 후보 목록
+    // (이미 TRAINER/ADMIN인 경우는 제외). 관리자가 드롭박스에서 고를 수 있도록 name+phone을 함께 내려준다.
+    List<Staff> searchMemberCandidates(@Param("gymId") Long gymId, @Param("keyword") String keyword);
+    // 드롭박스에서 선택된 회원이 실제로 이 지점의 승인 회원인지 서버측에서 재확인
+    Optional<Staff> findMemberCandidateById(@Param("gymId") Long gymId, @Param("id") String id);
     void promoteToTrainer(@Param("id") String id);
-    // 트레이너 본인이 앱 가입 시 등록한 지점(user_gym) — CRM 계정 발급 시 관리자 세션 지점 대신 이 값을 우선 사용
+    // 대상 사용자 본인의 소속 지점(user_gym) — 승격시키는 관리자의 gymId와 일치하는지 서비스 계층에서 확인
     Long findGymIdByUserId(@Param("userId") String userId);
-    // 트레이너 권한 회수: 계정 삭제가 아니라 role을 MEMBER로 되돌림
-    void revokeTrainer(@Param("id") String id);
+    void update(@Param("staff") Staff staff, @Param("gymId") Long gymId);
+    void revokeTrainer(@Param("id") String id, @Param("gymId") Long gymId);
+    void updateRole(@Param("id") String id, @Param("role") String role, @Param("gymId") Long gymId);
 
-    // Sector 13 — 트레이너 CRM 대시보드
     Map<String, Object> findDashboard(@Param("appUserId") String appUserId, @Param("gymId") Long gymId);
     List<Member> findAssignedMembers(@Param("appUserId") String appUserId, @Param("gymId") Long gymId);
 }

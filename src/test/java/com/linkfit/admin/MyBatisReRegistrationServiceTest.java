@@ -132,15 +132,22 @@ class MyBatisReRegistrationServiceTest {
     }
 
     @Test
-    void updateStatus_delegatesToMapper() {
-        service.updateStatus("id-1", "success");
-        verify(mapper).updateStatus("id-1", "success", null);
+    void addNote_delegatesToMapper() {
+        service.addNote("id-1", 1L, "author-1", "메모 내용");
+        verify(mapper).insertNote(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void findNotes_delegatesToMapper() {
+        when(mapper.findNotesByReregistrationId("id-1", 1L)).thenReturn(Collections.emptyList());
+        service.findNotes("id-1", 1L);
+        verify(mapper).findNotesByReregistrationId("id-1", 1L);
     }
 
     @Test
     void findById_delegatesToMapper() {
-        when(mapper.findById("id-1")).thenReturn(Optional.empty());
-        service.findById("id-1");
-        verify(mapper).findById("id-1");
+        when(mapper.findById("id-1", 1L)).thenReturn(Optional.empty());
+        service.findById("id-1", 1L);
+        verify(mapper).findById("id-1", 1L);
     }
 }

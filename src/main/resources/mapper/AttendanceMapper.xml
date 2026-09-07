@@ -43,11 +43,10 @@
         FROM attendance a
         JOIN users u ON a.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
-        <where>
-            <if test="date != null and date != ''">
-                <include refid="periodFilter"/>
-            </if>
-        </where>
+        WHERE a.gym_id = #{gymId}
+        <if test="date != null and date != ''">
+            <include refid="periodFilter"/>
+        </if>
         ORDER BY a.attend_date DESC, a.check_in_time DESC
     </select>
 
@@ -59,13 +58,13 @@
         WHERE a.id=#{id}
     </select>
 
-    <insert id="checkIn" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO attendance (user_id, type, attend_date, check_in_time)
-        VALUES (#{memberId}, #{type}, #{attendDate}, #{checkInTime})
+    <insert id="checkIn" useGeneratedKeys="true" keyProperty="attendance.id">
+        INSERT INTO attendance (user_id, type, attend_date, check_in_time, gym_id)
+        VALUES (#{attendance.memberId}, #{attendance.type}, #{attendance.attendDate}, #{attendance.checkInTime}, #{gymId})
     </insert>
 
     <delete id="cancel">
-        DELETE FROM attendance WHERE id=#{id}
+        DELETE FROM attendance WHERE id=#{id} AND gym_id=#{gymId}
     </delete>
 
     <select id="findFrozen" resultMap="freezeResultMap">
@@ -74,6 +73,7 @@
         JOIN users u ON f.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         WHERE #{date} BETWEEN f.freeze_start AND f.freeze_end
+          AND f.gym_id = #{gymId}
         ORDER BY up.name ASC
     </select>
 
@@ -85,21 +85,20 @@
         FROM attendance a
         JOIN users u ON a.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
-        <where>
-            <if test="date != null and date != ''">
-                <choose>
-                    <when test="period == 'weekly'">
-                        AND a.attend_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
-                                              AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
-                    </when>
-                    <when test="period == 'monthly'">
-                        AND DATE_FORMAT(a.attend_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
-                    </when>
-                    <otherwise>AND a.attend_date=#{date}</otherwise>
-                </choose>
-            </if>
-            <if test="type != null and type != ''">AND a.type=#{type}</if>
-        </where>
+        WHERE a.gym_id = #{gymId}
+        <if test="date != null and date != ''">
+            <choose>
+                <when test="period == 'weekly'">
+                    AND a.attend_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
+                                          AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
+                </when>
+                <when test="period == 'monthly'">
+                    AND DATE_FORMAT(a.attend_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
+                </when>
+                <otherwise>AND a.attend_date=#{date}</otherwise>
+            </choose>
+        </if>
+        <if test="type != null and type != ''">AND a.type=#{type}</if>
     </select>
 
     <select id="countFrozen" resultType="map">
@@ -111,18 +110,35 @@
         JOIN users u ON f.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         WHERE #{date} BETWEEN f.freeze_start AND f.freeze_end
+          AND f.gym_id = #{gymId}
     </select>
 
     <select id="dailyTrend" resultType="map">
         SELECT attend_date AS date, COUNT(*) AS cnt
           FROM attendance
          WHERE attend_date BETWEEN #{startDate} AND #{endDate}
+           AND gym_id = #{gymId}
          GROUP BY attend_date
          ORDER BY attend_date ASC
     </select>
 
-    <!-- 회원별 이번 달 출석 통계 -->
-    <select id="memberMonthlyStats" resultType="map">
+    <!-- 회원별 출석 통계 — periodFilter와 동일한 daily/weekly/monthly 범위 로직(a. 접두 버전) -->
+    <sql id="periodFilterA">
+        <choose>
+            <when test="period == 'weekly'">
+                AND a.attend_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
+                                      AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
+            </when>
+            <when test="period == 'monthly'">
+                AND DATE_FORMAT(a.attend_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
+            </when>
+            <otherwise>
+                AND a.attend_date = #{date}
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="memberPeriodStats" resultType="map">
         SELECT
             u.user_id                       AS memberId,
             up.name                         AS memberName,
@@ -132,9 +148,10 @@
             MAX(a.attend_date)              AS lastAttend
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         LEFT JOIN attendance a
             ON a.user_id = u.user_id
-            AND DATE_FORMAT(a.attend_date, '%Y-%m') = #{yearMonth}
+            <include refid="periodFilterA"/>
         WHERE u.role = 'MEMBER' AND u.is_active = 1 AND u.deleted_at IS NULL
         GROUP BY u.user_id, up.name, up.gender, up.tier
         ORDER BY attendCount DESC, up.name ASC
@@ -151,6 +168,7 @@
             DATEDIFF(CURDATE(), MAX(a.attend_date)) AS daysSince
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         LEFT JOIN attendance a ON a.user_id = u.user_id
         WHERE u.role = 'MEMBER' AND u.is_active = 1 AND u.deleted_at IS NULL
         GROUP BY u.user_id, up.name, up.gender, up.tier
@@ -159,14 +177,14 @@
     </select>
 
     <!-- 유증 등록 -->
-    <insert id="addFreeze" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO member_freeze (user_id, freeze_start, freeze_end, reason)
-        VALUES (#{memberId}, #{freezeStart}, #{freezeEnd}, #{reason})
+    <insert id="addFreeze" useGeneratedKeys="true" keyProperty="freeze.id">
+        INSERT INTO member_freeze (user_id, freeze_start, freeze_end, reason, gym_id)
+        VALUES (#{freeze.memberId}, #{freeze.freezeStart}, #{freeze.freezeEnd}, #{freeze.reason}, #{gymId})
     </insert>
 
     <!-- 유증 삭제 -->
     <delete id="deleteFreeze">
-        DELETE FROM member_freeze WHERE id = #{id}
+        DELETE FROM member_freeze WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
 </mapper>

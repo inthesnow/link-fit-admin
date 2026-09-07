@@ -19,7 +19,10 @@ public class Membership {
     private int paidAmount;
     private String paymentMethod;
     private String regType;   // NEW, RE, RE_INFLOW, SINGLE_ITEM, TRANSFER — 신규/재등록/재유입/단품결제/양도
-    private String status;    // null(정상) | TRANSFERRED(다른 회원에게 양도되어 더 이상 유효하지 않음)
+    private String status;    // null(정상) | TRANSFERRED(양도되어 더 이상 유효하지 않음) |
+                               // EXPIRED_UNKNOWN(엑셀 이관 시 이용종료일 미기재 — 실제 종료일을
+                               // 추정하지 않고 이미 만료된 것으로 표시. status IS NULL 조건에서
+                               // TRANSFERRED와 동일하게 제외되어 유효 이용권 집계엔 안 잡힘)
     private String memo;
     private LocalDateTime createdAt;
     // joined fields for list views

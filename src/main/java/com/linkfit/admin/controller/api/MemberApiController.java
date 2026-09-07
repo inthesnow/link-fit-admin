@@ -3,10 +3,12 @@ package com.linkfit.admin.controller.api;
 import com.linkfit.admin.common.ApiResponse;
 import com.linkfit.admin.domain.CrmMemberNote;
 import com.linkfit.admin.domain.CrmMemberTag;
+import com.linkfit.admin.domain.CrmMessage;
 import com.linkfit.admin.domain.Member;
 import com.linkfit.admin.domain.MemberTicket;
 import com.linkfit.admin.domain.Staff;
 import com.linkfit.admin.domain.TicketLog;
+import com.linkfit.admin.mapper.CrmMessageMapper;
 import com.linkfit.admin.security.CrmUserDetails;
 import com.linkfit.admin.service.CrmMemberService;
 import com.linkfit.admin.service.MemberImportService;
@@ -27,6 +29,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,13 +43,16 @@ public class MemberApiController {
     private final CrmMemberService crmMemberService;
     private final StaffService staffService;
     private final MemberImportService memberImportService;
+    private final CrmMessageMapper crmMessageMapper;
 
     public MemberApiController(MemberService memberService, CrmMemberService crmMemberService,
-                                StaffService staffService, MemberImportService memberImportService) {
+                                StaffService staffService, MemberImportService memberImportService,
+                                CrmMessageMapper crmMessageMapper) {
         this.memberService    = memberService;
         this.crmMemberService = crmMemberService;
         this.staffService     = staffService;
         this.memberImportService = memberImportService;
+        this.crmMessageMapper = crmMessageMapper;
     }
 
     // 회원 상세정보의 "담당 트레이너 변경" 드롭다운 전용 — /api/staff는 "staff"(직원 관리)
@@ -55,12 +61,19 @@ public class MemberApiController {
     // (직원 관리를 잠근 계정에서 실제로 재현 확인함). id/name만 내려주는 최소 정보 엔드포인트를
     // members 카테고리 하위에 따로 둬서 우회.
     @GetMapping("/trainer-options")
-    public ApiResponse<List<Map<String, String>>> trainerOptions() {
-        List<Staff> trainers = staffService.findAll("TRAINER", 0, 200);
+    public ApiResponse<List<Map<String, String>>> trainerOptions(@AuthenticationPrincipal CrmUserDetails principal) {
+        List<Staff> trainers = staffService.findTrainerOptions(principal.getGymId());
         List<Map<String, String>> options = trainers.stream()
                 .map(t -> Map.of("id", t.getId(), "name", t.getName() != null ? t.getName() : t.getId()))
                 .toList();
         return ApiResponse.ok(options);
+    }
+
+    // 회원관리 페이지 상단 집계 패널 — {total, valid, expired, expiring}
+    @GetMapping("/summary")
+    public ApiResponse<Map<String, Object>> summary(@AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] GET /api/members/summary");
+        return ApiResponse.ok(memberService.summaryCounts(principal.getGymId()));
     }
 
     @GetMapping
@@ -184,9 +197,11 @@ public class MemberApiController {
     }
 
     @GetMapping("/{id}/memberships")
-    public ApiResponse<List<com.linkfit.admin.domain.Membership>> getMemberships(@PathVariable String id) {
+    public ApiResponse<List<com.linkfit.admin.domain.Membership>> getMemberships(
+            @PathVariable String id,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Member] GET /api/members/{id}/memberships - id={}", id);
-        return ApiResponse.ok(memberService.findMemberships(id));
+        return ApiResponse.ok(memberService.findMemberships(id, principal.getGymId()));
     }
 
     @PostMapping("/{id}/memberships")
@@ -259,6 +274,42 @@ public class MemberApiController {
         log.info("[Member] POST /api/members/{id}/notes - id={}", id);
         return ApiResponse.ok(crmMemberService.addNote(
                 id, principal.getGymId(), principal.getId(), body.get("content")));
+    }
+
+    // 회원 상세의 "쪽지" 탭 — 관리자<->이 회원 간 전체 대화(crm_messages, 양방향).
+    // 회원 쪽(인앱)에서는 lof-backend의 별도 /api/gym-messages가 같은 crm_messages
+    // 테이블을 gym_id 기준으로 읽고 쓴다 — 이 화면과 앱 화면은 같은 대화를 공유한다.
+    @GetMapping("/{id}/messages")
+    public ApiResponse<List<CrmMessage>> getMessages(
+            @PathVariable String id,
+            @AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] GET /api/members/{id}/messages - id={}", id);
+        List<CrmMessage> thread = crmMessageMapper.findThreadWithMember(principal.getGymId(), id);
+        crmMessageMapper.markMemberMessagesRead(principal.getGymId(), id);
+        return ApiResponse.ok(thread);
+    }
+
+    @PostMapping("/{id}/messages")
+    public ApiResponse<CrmMessage> sendMessage(
+            @PathVariable String id,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal CrmUserDetails principal) {
+        log.info("[Member] POST /api/members/{id}/messages - id={}", id);
+        String content = body.get("content");
+        if (content == null || content.isBlank()) {
+            return ApiResponse.error("내용을 입력해주세요.");
+        }
+        CrmMessage message = new CrmMessage();
+        message.setId(UUID.randomUUID().toString());
+        message.setGymId(principal.getGymId());
+        message.setSenderType("admin");
+        message.setSenderId(principal.getId());
+        message.setReceiverType("member");
+        message.setReceiverId(id);
+        message.setContent(content);
+        message.setNotice(false);
+        crmMessageMapper.insert(message);
+        return ApiResponse.ok(message);
     }
 
     @GetMapping("/{id}/tags")

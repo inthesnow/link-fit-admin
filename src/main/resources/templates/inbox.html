@@ -22,6 +22,10 @@
         </div>
         <div class="header-right" style="gap:8px">
             <button class="btn btn-secondary" onclick="markAllRead()" style="font-size:12px">모두 읽음</button>
+            <button class="btn btn-secondary" onclick="openBroadcast()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M3 11l18-5v14L3 15v-4zm0 0v4h2v-4H3z"/></svg>
+                단체쪽지 보내기
+            </button>
             <button class="btn btn-primary" onclick="openCompose()">
                 <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 새 메시지
@@ -31,7 +35,7 @@
 
     <!-- 탭 -->
     <div class="sub-tabs" style="padding:0 24px;border-bottom:1px solid var(--border)">
-        <button class="sub-tab active" onclick="switchTab('received', this)">받은 메시지 <span id="unreadBadge" class="inbox-cnt"></span></button>
+        <button class="sub-tab active" onclick="switchTab('unread', this)">읽지않은 쪽지함 <span id="unreadBadge" class="inbox-cnt"></span></button>
         <button class="sub-tab" onclick="switchTab('sent', this)">보낸 메시지</button>
         <button class="sub-tab" onclick="switchTab('notice', this)">공지사항</button>
     </div>
@@ -74,15 +78,21 @@
         <div class="modal-body">
             <div class="form-group">
                 <label class="form-label">수신자 유형</label>
-                <select class="form-select" id="cReceiverType">
+                <select class="form-select" id="cReceiverType" onchange="onComposeReceiverTypeChange()">
                     <option value="admin">관리자</option>
                     <option value="trainer">트레이너</option>
                     <option value="member">회원</option>
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="cReceiverIdGroup">
                 <label class="form-label">수신자 ID</label>
                 <input type="text" class="form-input" id="cReceiverId" placeholder="수신자 user_id 또는 crm_users.id">
+            </div>
+            <div class="form-group" id="cMemberSearchGroup" style="display:none">
+                <label class="form-label">회원 검색 (이름)</label>
+                <input type="text" class="form-input" id="cMemberSearch" placeholder="이름으로 검색" oninput="searchComposeMember()">
+                <div id="cMemberResults" style="display:none;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-top:6px"></div>
+                <div id="cMemberSelected" style="display:none;margin-top:8px;padding:8px 12px;background:var(--surface-up);border-radius:8px;font-size:13px"></div>
             </div>
             <div class="form-group">
                 <label class="form-label" style="display:flex;align-items:center;gap:8px">
@@ -97,6 +107,54 @@
         <div class="modal-footer">
             <button class="btn btn-secondary" onclick="closeCompose()">취소</button>
             <button class="btn btn-primary" onclick="sendMessage()">보내기</button>
+        </div>
+    </div>
+</div>
+
+<!-- 단체쪽지 보내기 모달 -->
+<div class="modal-overlay" id="broadcastModal">
+    <div class="modal" style="max-width:520px">
+        <div class="modal-header">
+            <span class="modal-title">단체쪽지 보내기</span>
+            <button class="modal-close" onclick="closeBroadcast()">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label class="form-label">성별</label>
+                    <select class="form-select" id="bcGender" onchange="updateBroadcastPreview()">
+                        <option value="">전체</option>
+                        <option value="남자">남자</option>
+                        <option value="여자">여자</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">이용상태</label>
+                    <select class="form-select" id="bcValidity" onchange="updateBroadcastPreview()">
+                        <option value="">전체</option>
+                        <option value="valid">유효</option>
+                        <option value="expired">만료</option>
+                    </select>
+                </div>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin:4px 0 14px">
+                발송 대상: <b id="bcTargetCount" style="color:var(--accent)">-</b>명
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="display:flex;align-items:center;gap:8px">
+                    <input type="checkbox" id="bcIsNotice"> 공지사항으로 발송
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="form-label">내용</label>
+                <textarea class="form-textarea" id="bcContent" rows="5" placeholder="메시지 내용을 입력하세요..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeBroadcast()">취소</button>
+            <button class="btn btn-primary" onclick="sendBroadcast()">발송</button>
         </div>
     </div>
 </div>
@@ -119,10 +177,15 @@
 .msg-unread-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 4px; }
 .inbox-cnt { background: var(--error); color: #fff; font-size: 10px; font-weight: 700; border-radius: 10px; padding: 1px 6px; margin-left: 4px; }
 .notice-badge { background: color-mix(in srgb,#58A6FF 20%,transparent); color: var(--accent); font-size: 10px; border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
+.member-result-item {
+    padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border);
+}
+.member-result-item:last-child { border-bottom: none; }
+.member-result-item:hover { background: var(--surface-up); }
 </style>
 
 <script>
-let currentTab = 'received';
+let currentTab = 'unread';
 let currentPage = 0;
 const pageSize = 20;
 let replyParentId = null;
@@ -136,14 +199,51 @@ function switchTab(tab, btn) {
     currentPage = 0;
     document.querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('replyBtn').style.display = tab === 'received' ? '' : 'none';
-    loadList();
+    document.getElementById('replyBtn').style.display = 'none';
+    document.getElementById('pagination').innerHTML = '';
+    if (tab === 'unread') loadUnreadThreads();
+    else loadList();
 }
 
 async function loadList() {
     const res  = await fetch(`/api/inbox/messages?type=${currentTab}&page=${currentPage}&size=${pageSize}`);
     const json = await res.json();
     renderList(json.data?.items, json.data?.total);
+}
+
+// "읽지않은 쪽지함" — 회원이 지점 앞으로 보낸 미확인 쪽지를 회원별로 묶은 대화목록
+async function loadUnreadThreads() {
+    const res  = await fetch('/api/inbox/unread-threads');
+    const json = await res.json();
+    renderThreads(json.data);
+}
+
+function renderThreads(threads) {
+    const container = document.getElementById('msgList');
+    if (!threads || !threads.length) {
+        container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted)">읽지 않은 쪽지가 없습니다.</div>`;
+        return;
+    }
+    container.innerHTML = threads.map(t => {
+        const name = t.memberName || t.memberId;
+        const initials = name.charAt(0).toUpperCase();
+        const preview = (t.lastContent || '').replace(/\n/g,' ').substring(0, 60);
+        return `<div class="msg-row unread" onclick="goToMemberThread('${t.memberId}')">
+            <div class="msg-avatar">${initials}</div>
+            <div style="flex:1;min-width:0">
+                <div class="msg-subject">${escHtml(name)}</div>
+                <div class="msg-preview">${escHtml(preview)}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <span class="msg-time">${fmtDate(t.lastAt)}</span>
+                <span class="inbox-cnt" style="display:inline">${t.unreadCount}</span>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function goToMemberThread(memberId) {
+    window.location.href = `/members?openId=${encodeURIComponent(memberId)}&tab=msg`;
 }
 
 async function loadUnread() {
@@ -165,7 +265,7 @@ function renderList(items, total) {
         const from = m.senderName || m.senderId;
         const initials = from.charAt(0).toUpperCase();
         const preview = (m.content || '').replace(/\n/g,' ').substring(0, 60);
-        const unread = !m.read && currentTab === 'received';
+        const unread = false;
         const noticeBadge = m.notice ? '<span class="notice-badge">공지</span>' : '';
         return `<div class="msg-row${unread ? ' unread' : ''}" onclick="viewMsg('${m.id}')">
             <div class="msg-avatar">${initials}</div>
@@ -223,6 +323,11 @@ function openReply() {
     document.getElementById('cContent').value      = '';
     document.getElementById('cIsNotice').checked   = false;
     replyParentId = viewingMsg.id;
+    onComposeReceiverTypeChange();
+    if (viewingMsg.senderType === 'member') {
+        document.getElementById('cMemberSelected').innerHTML = `선택됨: <b>${escHtml(viewingMsg.senderName || viewingMsg.senderId)}</b>`;
+        document.getElementById('cMemberSelected').style.display = '';
+    }
     document.getElementById('composeModal').classList.add('open');
 }
 
@@ -233,12 +338,56 @@ function openCompose() {
     document.getElementById('cContent').value      = '';
     document.getElementById('cIsNotice').checked   = false;
     replyParentId = null;
+    onComposeReceiverTypeChange();
     document.getElementById('composeModal').classList.add('open');
 }
 
 function closeCompose() {
     document.getElementById('composeModal').classList.remove('open');
     replyParentId = null;
+}
+
+// ── 수신자 유형에 따라 "ID 직접입력" ↔ "회원 이름 검색" 전환 ──────────
+function onComposeReceiverTypeChange() {
+    const isMember = document.getElementById('cReceiverType').value === 'member';
+    document.getElementById('cReceiverIdGroup').style.display   = isMember ? 'none' : '';
+    document.getElementById('cMemberSearchGroup').style.display = isMember ? '' : 'none';
+    document.getElementById('cMemberSearch').value = '';
+    document.getElementById('cMemberResults').style.display = 'none';
+    document.getElementById('cMemberSelected').style.display = 'none';
+    if (isMember) document.getElementById('cReceiverId').value = '';
+}
+
+let composeSearchTimer = null;
+function searchComposeMember() {
+    clearTimeout(composeSearchTimer);
+    composeSearchTimer = setTimeout(async () => {
+        const kw = document.getElementById('cMemberSearch').value.trim();
+        const results = document.getElementById('cMemberResults');
+        if (!kw) { results.style.display = 'none'; return; }
+        const res  = await fetch(`/api/members?keyword=${encodeURIComponent(kw)}&page=0&size=10`);
+        const json = await res.json();
+        const list = json.data?.members || [];
+        if (!list.length) {
+            results.innerHTML = `<div style="padding:10px 12px;font-size:13px;color:var(--text-muted)">검색 결과가 없습니다.</div>`;
+        } else {
+            results.innerHTML = list.map(m => `
+                <div class="member-result-item" onclick="selectComposeMember('${m.id}','${escHtml(m.name||m.id)}','${m.gender||''}','${formatPhone(m.phone)||''}')">
+                    ${escHtml(m.name || m.id)}
+                    <span style="color:var(--text-muted);margin-left:8px;font-size:12px">${m.gender || '-'} · ${formatPhone(m.phone) || '-'}</span>
+                </div>`).join('');
+        }
+        results.style.display = '';
+    }, 300);
+}
+
+function selectComposeMember(id, name, gender, phone) {
+    document.getElementById('cReceiverId').value = id;
+    document.getElementById('cMemberSelected').innerHTML =
+        `선택됨: <b>${escHtml(name)}</b> <span style="color:var(--text-muted)">(${gender || '-'} · ${phone || '-'})</span>`;
+    document.getElementById('cMemberSelected').style.display = '';
+    document.getElementById('cMemberResults').style.display = 'none';
+    document.getElementById('cMemberSearch').value = '';
 }
 
 async function sendMessage() {
@@ -260,14 +409,73 @@ async function sendMessage() {
     if (currentTab === 'sent') loadList();
 }
 
+// ── 단체쪽지 보내기 ───────────────────────────────────────────
+function openBroadcast() {
+    document.getElementById('bcGender').value = '';
+    document.getElementById('bcValidity').value = '';
+    document.getElementById('bcIsNotice').checked = false;
+    document.getElementById('bcContent').value = '';
+    document.getElementById('broadcastModal').classList.add('open');
+    updateBroadcastPreview();
+}
+
+function closeBroadcast() {
+    document.getElementById('broadcastModal').classList.remove('open');
+}
+
+async function updateBroadcastPreview() {
+    const gender   = document.getElementById('bcGender').value;
+    const validity = document.getElementById('bcValidity').value;
+    const params   = new URLSearchParams();
+    if (gender)   params.set('gender', gender);
+    if (validity) params.set('validity', validity);
+    const el = document.getElementById('bcTargetCount');
+    el.textContent = '...';
+    try {
+        const res  = await fetch(`/api/inbox/broadcast-count?${params}`);
+        const json = await res.json();
+        el.textContent = json.data ?? 0;
+    } catch (e) {
+        el.textContent = '-';
+    }
+}
+
+async function sendBroadcast() {
+    const gender   = document.getElementById('bcGender').value;
+    const validity = document.getElementById('bcValidity').value;
+    const isNotice = document.getElementById('bcIsNotice').checked;
+    const content  = document.getElementById('bcContent').value.trim();
+    const targetCount = document.getElementById('bcTargetCount').textContent;
+    if (!content) { alert('내용을 입력해주세요.'); return; }
+    if (!confirm(`${targetCount}명에게 쪽지를 발송하시겠습니까?`)) return;
+
+    const res = await fetch('/api/inbox/broadcast', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ gender, validity, content, notice: isNotice })
+    });
+    const json = await res.json();
+    if (!json.success) { alert(json.message || '발송에 실패했습니다.'); return; }
+    alert(`${json.data.sentCount}명에게 발송 완료했습니다.`);
+    closeBroadcast();
+    if (currentTab === 'sent') loadList();
+}
+
 async function markAllRead() {
     await fetch('/api/inbox/messages/read-all', { method: 'PATCH', headers: csrfHeaders() });
-    loadList();
+    if (currentTab === 'unread') loadUnreadThreads(); else loadList();
     loadUnread();
 }
 
 function escHtml(s) {
     return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatPhone(phone) {
+    if (!phone) return '';
+    const digits = String(phone).replace(/[^0-9]/g, '');
+    if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3');
+    if (digits.length === 10) return digits.replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+    return digits;
 }
 function fmtDate(s) {
     if (!s) return '-';
@@ -283,8 +491,8 @@ function closeSidebar() {
     document.getElementById('sidebarOverlay').classList.remove('open');
 }
 
-document.getElementById('replyBtn').style.display = '';
-loadList();
+document.getElementById('replyBtn').style.display = 'none';
+loadUnreadThreads();
 loadUnread();
 </script>
 </body>

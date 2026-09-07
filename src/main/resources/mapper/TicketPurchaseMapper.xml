@@ -3,8 +3,10 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.linkfit.admin.mapper.TicketPurchaseMapper">
 
+    <!-- ticket_purchases 자체엔 gym_id 컬럼이 없어(linkonfit 인앱결제 이력, 지점 무관 개념) user_gym으로 스코핑 -->
     <sql id="ticketWhere">
         <where>
+            AND EXISTS (SELECT 1 FROM user_gym ug WHERE ug.user_id = tp.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1)
             <if test="productId != null and productId != ''">AND tp.product_id = #{productId}</if>
             <if test="startDate != null and startDate != ''">AND DATE(tp.created_at) &gt;= #{startDate}</if>
             <if test="endDate != null and endDate != ''">AND DATE(tp.created_at) &lt;= #{endDate}</if>
@@ -35,8 +37,9 @@
             SUM(quantity)                    AS totalQty,
             SUM(price_krw)                   AS totalRevenue,
             DATE_FORMAT(created_at, '%Y-%m') AS ym
-        FROM ticket_purchases
+        FROM ticket_purchases tp
         WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+          AND EXISTS (SELECT 1 FROM user_gym ug WHERE ug.user_id = tp.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1)
         GROUP BY product_id, DATE_FORMAT(created_at, '%Y-%m')
         ORDER BY ym DESC, product_id
     </select>

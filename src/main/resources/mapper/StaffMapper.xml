@@ -10,16 +10,23 @@
         <result property="email"    column="email"/>
         <result property="role"     column="role"/>
         <result property="hireDate" column="hire_date"/>
+        <result property="workStatus" column="work_status"/>
+        <result property="resignationDate" column="resignation_date"/>
         <result property="status"   column="status"/>
     </resultMap>
 
+    <!-- users엔 gym_id가 없어(트레이너도 회원과 동일하게 user_gym으로 소속 관리) 조인으로 스코핑.
+         입사일/근무상태/퇴사일은 crm_users(트레이너 CRM 계정)에 저장된 값을 가져온다 —
+         더 이상 앱 회원가입일(u.created_at)을 입사일로 대신 쓰지 않는다. -->
     <sql id="staffSelect">
         SELECT u.user_id AS id, u.email, up.name, up.contact AS phone,
                u.role,
                CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-               DATE(u.created_at) AS hire_date
+               cu.hire_date, cu.work_status, cu.resignation_date
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        LEFT JOIN crm_users cu ON cu.app_user_id = u.user_id AND cu.gym_id = #{gymId}
         WHERE u.role = 'TRAINER'
     </sql>
 
@@ -30,7 +37,22 @@
     </select>
 
     <select id="count" resultType="long">
-        SELECT COUNT(*) FROM users WHERE role = 'TRAINER'
+        SELECT COUNT(*) FROM users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        WHERE u.role = 'TRAINER'
+    </select>
+
+    <!-- 회원 상세정보 "담당 트레이너 지정" 드롭박스 전용 — 이 지점 소속 트레이너만 -->
+    <select id="findTrainerOptions" resultMap="staffResultMap">
+        SELECT u.user_id AS id, u.email, up.name, up.contact AS phone,
+               u.role,
+               CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
+               DATE(u.created_at) AS hire_date
+        FROM users u
+        LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        WHERE u.role = 'TRAINER' AND u.is_active = 1
+        ORDER BY up.name
     </select>
 
     <select id="findById" resultMap="staffResultMap">
@@ -38,15 +60,32 @@
         AND u.user_id = #{id}
     </select>
 
-    <select id="findAppUserByNameAndPhone" resultMap="staffResultMap">
-        SELECT u.user_id AS id, u.email, up.name, up.contact AS phone,
-               u.role,
-               CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status,
-               DATE(u.created_at) AS hire_date
+    <!-- 트레이너 등록용 회원 검색 — 예전엔 이름+전화번호 "정확히 일치"만 찾아서, 전화번호
+         포맷이 조금만 달라도(공백/하이픈 등) "회원이 아닙니다"로 잘못 뜨는 문제가 있었다.
+         이제는 이 지점에 실제로 승인(user_gym.status='APPROVED')된 회원만 대상으로 이름
+         일부 검색 결과를 보여주고 관리자가 드롭박스에서 직접 선택하게 한다. -->
+    <select id="searchMemberCandidates" resultMap="staffResultMap">
+        SELECT u.user_id AS id, u.email, up.name, up.contact AS phone, u.role,
+               CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status
         FROM users u
-        LEFT JOIN user_profiles up ON u.user_id = up.user_id
-        WHERE up.name = #{name} AND up.contact = #{phone}
-        LIMIT 1
+        JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId}
+                         AND ug.is_active = 1 AND ug.status = 'APPROVED'
+        WHERE u.role NOT IN ('TRAINER', 'ADMIN')
+          AND up.name LIKE CONCAT('%', #{keyword}, '%')
+        ORDER BY up.name ASC
+        LIMIT 20
+    </select>
+
+    <!-- 드롭박스에서 고른 회원이 실제로 이 지점의 승인 회원인지 서버측에서 재확인(위조 방지) -->
+    <select id="findMemberCandidateById" resultMap="staffResultMap">
+        SELECT u.user_id AS id, u.email, up.name, up.contact AS phone, u.role,
+               CASE WHEN u.is_active = 1 THEN 'ACTIVE' ELSE 'INACTIVE' END AS status
+        FROM users u
+        JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId}
+                         AND ug.is_active = 1 AND ug.status = 'APPROVED'
+        WHERE u.user_id = #{id}
     </select>
 
     <update id="promoteToTrainer">
@@ -61,16 +100,28 @@
     </select>
 
     <update id="update">
-        UPDATE user_profiles SET name=#{name}, contact=#{phone} WHERE user_id=#{id};
-        UPDATE users SET email=#{email} WHERE user_id=#{id}
+        UPDATE user_profiles up
+        JOIN user_gym ug ON ug.user_id = up.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET up.name=#{staff.name}, up.contact=#{staff.phone}
+        WHERE up.user_id=#{staff.id};
+        UPDATE users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET u.email=#{staff.email}
+        WHERE u.user_id=#{staff.id}
     </update>
 
     <update id="revokeTrainer">
-        UPDATE users SET role = 'MEMBER' WHERE user_id = #{id}
+        UPDATE users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET u.role = 'MEMBER'
+        WHERE u.user_id = #{id}
     </update>
 
     <update id="updateRole">
-        UPDATE users SET is_active = CASE WHEN #{role} = 'ACTIVE' THEN 1 ELSE 0 END WHERE user_id=#{id}
+        UPDATE users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET u.is_active = CASE WHEN #{role} = 'ACTIVE' THEN 1 ELSE 0 END
+        WHERE u.user_id=#{id}
     </update>
 
     <!-- ── Sector 13: 트레이너 CRM 대시보드 ────────────────── -->

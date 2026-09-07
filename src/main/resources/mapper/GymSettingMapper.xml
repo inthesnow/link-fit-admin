@@ -35,12 +35,15 @@
     </resultMap>
 
     <select id="find" resultMap="gymSettingResultMap">
-        SELECT * FROM gym_setting WHERE id = 1
+        SELECT * FROM gym_setting WHERE gym_id = #{gymId}
     </select>
 
+    <!-- id는 auto_increment가 아니라 레거시 단일 행 구조를 유지한 고정값 PK라, 신규 지점의
+         첫 저장 시에는 현재 최대값+1을 직접 계산해서 넣는다. gym_id엔 UNIQUE KEY가 있어
+         이미 저장된 지점은 ON DUPLICATE KEY UPDATE로 정상적으로 갱신된다. -->
     <insert id="upsert">
         INSERT INTO gym_setting (
-            id, gym_name, gym_phone, gym_address, is_open,
+            id, gym_id, gym_name, gym_phone, gym_address, is_open,
             mon_open, mon_close, mon_closed,
             tue_open, tue_close, tue_closed,
             wed_open, wed_close, wed_closed,
@@ -50,31 +53,32 @@
             sun_open, sun_close, sun_closed,
             notice
         ) VALUES (
-            1, #{gymName}, #{gymPhone}, #{gymAddress}, #{isOpen},
-            #{monOpen}, #{monClose}, #{monClosed},
-            #{tueOpen}, #{tueClose}, #{tueClosed},
-            #{wedOpen}, #{wedClose}, #{wedClosed},
-            #{thuOpen}, #{thuClose}, #{thuClosed},
-            #{friOpen}, #{friClose}, #{friClosed},
-            #{satOpen}, #{satClose}, #{satClosed},
-            #{sunOpen}, #{sunClose}, #{sunClosed},
-            #{notice}
+            (SELECT next_id FROM (SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM gym_setting) AS t),
+            #{gymId}, #{setting.gymName}, #{setting.gymPhone}, #{setting.gymAddress}, #{setting.isOpen},
+            #{setting.monOpen}, #{setting.monClose}, #{setting.monClosed},
+            #{setting.tueOpen}, #{setting.tueClose}, #{setting.tueClosed},
+            #{setting.wedOpen}, #{setting.wedClose}, #{setting.wedClosed},
+            #{setting.thuOpen}, #{setting.thuClose}, #{setting.thuClosed},
+            #{setting.friOpen}, #{setting.friClose}, #{setting.friClosed},
+            #{setting.satOpen}, #{setting.satClose}, #{setting.satClosed},
+            #{setting.sunOpen}, #{setting.sunClose}, #{setting.sunClosed},
+            #{setting.notice}
         )
         ON DUPLICATE KEY UPDATE
-            gym_name   = #{gymName},   gym_phone    = #{gymPhone},
-            gym_address= #{gymAddress}, is_open     = #{isOpen},
-            mon_open   = #{monOpen},   mon_close    = #{monClose},   mon_closed = #{monClosed},
-            tue_open   = #{tueOpen},   tue_close    = #{tueClose},   tue_closed = #{tueClosed},
-            wed_open   = #{wedOpen},   wed_close    = #{wedClose},   wed_closed = #{wedClosed},
-            thu_open   = #{thuOpen},   thu_close    = #{thuClose},   thu_closed = #{thuClosed},
-            fri_open   = #{friOpen},   fri_close    = #{friClose},   fri_closed = #{friClosed},
-            sat_open   = #{satOpen},   sat_close    = #{satClose},   sat_closed = #{satClosed},
-            sun_open   = #{sunOpen},   sun_close    = #{sunClose},   sun_closed = #{sunClosed},
-            notice     = #{notice}
+            gym_name   = #{setting.gymName},   gym_phone    = #{setting.gymPhone},
+            gym_address= #{setting.gymAddress}, is_open     = #{setting.isOpen},
+            mon_open   = #{setting.monOpen},   mon_close    = #{setting.monClose},   mon_closed = #{setting.monClosed},
+            tue_open   = #{setting.tueOpen},   tue_close    = #{setting.tueClose},   tue_closed = #{setting.tueClosed},
+            wed_open   = #{setting.wedOpen},   wed_close    = #{setting.wedClose},   wed_closed = #{setting.wedClosed},
+            thu_open   = #{setting.thuOpen},   thu_close    = #{setting.thuClose},   thu_closed = #{setting.thuClosed},
+            fri_open   = #{setting.friOpen},   fri_close    = #{setting.friClose},   fri_closed = #{setting.friClosed},
+            sat_open   = #{setting.satOpen},   sat_close    = #{setting.satClose},   sat_closed = #{setting.satClosed},
+            sun_open   = #{setting.sunOpen},   sun_close    = #{setting.sunClose},   sun_closed = #{setting.sunClosed},
+            notice     = #{setting.notice}
     </insert>
 
     <update id="updateOpenStatus">
-        UPDATE gym_setting SET is_open = #{isOpen} WHERE id = 1
+        UPDATE gym_setting SET is_open = #{isOpen} WHERE gym_id = #{gymId}
     </update>
 
 </mapper>

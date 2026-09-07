@@ -31,51 +31,54 @@
 
     <select id="findAll" resultMap="classResultMap">
         SELECT * FROM class_session
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-            <if test="date != null and date != ''">AND class_date=#{date}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
+        <if test="date != null and date != ''">AND class_date=#{date}</if>
         ORDER BY class_date DESC, start_time ASC
         LIMIT #{size} OFFSET #{offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM class_session
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-            <if test="date != null and date != ''">AND class_date=#{date}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
+        <if test="date != null and date != ''">AND class_date=#{date}</if>
     </select>
 
     <select id="findById" resultMap="classResultMap">
-        SELECT * FROM class_session WHERE id=#{id}
+        SELECT * FROM class_session WHERE id=#{id} AND gym_id=#{gymId}
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="session.id">
         INSERT INTO class_session
-            (title, type, category, trainer_id, trainer_name, class_date, start_time, end_time, capacity, enrolled, status)
+            (title, type, category, trainer_id, trainer_name, class_date, start_time, end_time, capacity, enrolled, status, gym_id)
         VALUES
-            (#{title}, #{type}, #{category}, #{trainerId}, #{trainerName}, #{classDate}, #{startTime}, #{endTime}, #{capacity}, 0, 'OPEN')
+            (#{session.title}, #{session.type}, #{session.category}, #{session.trainerId}, #{session.trainerName},
+             #{session.classDate}, #{session.startTime}, #{session.endTime}, #{session.capacity}, 0, 'OPEN', #{gymId})
     </insert>
 
     <update id="update">
         UPDATE class_session
-        SET title=#{title}, type=#{type}, category=#{category},
-            trainer_id=#{trainerId}, trainer_name=#{trainerName},
-            class_date=#{classDate}, start_time=#{startTime}, end_time=#{endTime}, capacity=#{capacity}
-        WHERE id=#{id}
+        SET title=#{session.title}, type=#{session.type}, category=#{session.category},
+            trainer_id=#{session.trainerId}, trainer_name=#{session.trainerName},
+            class_date=#{session.classDate}, start_time=#{session.startTime}, end_time=#{session.endTime},
+            capacity=#{session.capacity}
+        WHERE id=#{session.id} AND gym_id=#{gymId}
     </update>
 
     <update id="cancel">
-        UPDATE class_session SET status='CANCELLED' WHERE id=#{id}
+        UPDATE class_session SET status='CANCELLED' WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
+    <!-- class_attendee엔 gym_id가 없음 — class_session_id로 스코핑됨(위 findById로 소속 확인 후에만
+         서비스 계층에서 호출). enroll/cancelEnrollment 자체는 그대로, increment/decrement는 대상
+         class_session 행에 gym_id 조건을 걸어 이중 방어. -->
     <insert id="enroll">
         INSERT INTO class_attendee (class_session_id, user_id) VALUES (#{classId}, #{memberId})
     </insert>
 
     <update id="incrementEnrolled">
-        UPDATE class_session SET enrolled=enrolled+1 WHERE id=#{id}
+        UPDATE class_session SET enrolled=enrolled+1 WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
     <delete id="cancelEnrollment">
@@ -83,13 +86,14 @@
     </delete>
 
     <update id="decrementEnrolled">
-        UPDATE class_session SET enrolled=GREATEST(enrolled-1, 0) WHERE id=#{id}
+        UPDATE class_session SET enrolled=GREATEST(enrolled-1, 0) WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
     <select id="findAttendees" resultMap="attendeeResultMap">
         SELECT ca.id, ca.class_session_id, ca.user_id AS member_id, up.name AS member_name,
                up.contact AS phone, up.gender, ca.registered_at, ca.attended
         FROM class_attendee ca
+        JOIN class_session cs ON cs.id = ca.class_session_id AND cs.gym_id = #{gymId}
         JOIN users u ON ca.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         WHERE ca.class_session_id=#{classId}

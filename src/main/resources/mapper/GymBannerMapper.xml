@@ -13,25 +13,25 @@
     </resultMap>
 
     <select id="findAll" resultMap="gymBannerResultMap">
-        SELECT * FROM gym_banner ORDER BY sort_order ASC, created_at DESC
+        SELECT * FROM gym_banner WHERE gym_id = #{gymId} ORDER BY sort_order ASC, created_at DESC
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO gym_banner (image_url, title, is_active, sort_order)
-        VALUES (#{imageUrl}, #{title}, 1,
-            COALESCE((SELECT MAX(sort_order) + 1 FROM gym_banner b2), 0))
+    <insert id="insert" useGeneratedKeys="true" keyProperty="banner.id">
+        INSERT INTO gym_banner (gym_id, image_url, title, is_active, sort_order)
+        VALUES (#{gymId}, #{banner.imageUrl}, #{banner.title}, 1,
+            COALESCE((SELECT MAX(sort_order) + 1 FROM gym_banner b2 WHERE b2.gym_id = #{gymId}), 0))
     </insert>
 
     <delete id="delete">
-        DELETE FROM gym_banner WHERE id = #{id}
+        DELETE FROM gym_banner WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
     <update id="updateSortOrder">
-        UPDATE gym_banner SET sort_order = #{sortOrder} WHERE id = #{id}
+        UPDATE gym_banner SET sort_order = #{sortOrder} WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <update id="toggleActive">
-        UPDATE gym_banner SET is_active = #{isActive} WHERE id = #{id}
+        UPDATE gym_banner SET is_active = #{isActive} WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
 </mapper>

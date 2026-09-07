@@ -31,12 +31,14 @@
         <include refid="scheduleSelect"/>
         WHERE YEAR(ts.schedule_date) = #{year}
           AND MONTH(ts.schedule_date) = #{month}
+          AND ts.gym_id = #{gymId}
         ORDER BY ts.schedule_date ASC, ts.start_time ASC
     </select>
 
     <select id="findByDate" resultMap="scheduleResultMap">
         <include refid="scheduleSelect"/>
         WHERE ts.schedule_date = #{date}
+          AND ts.gym_id = #{gymId}
         ORDER BY ts.start_time ASC
     </select>
 
@@ -44,6 +46,7 @@
     <select id="findByTrainer" resultMap="scheduleResultMap">
         <include refid="scheduleSelect"/>
         WHERE ts.trainer_id = #{trainerId}
+          AND ts.gym_id = #{gymId}
         <if test="fromDate != null and fromDate != ''">
             AND ts.schedule_date &gt;= #{fromDate}
         </if>

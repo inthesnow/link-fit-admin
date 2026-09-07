@@ -16,43 +16,42 @@
 
     <select id="findAll" resultMap="productResultMap">
         SELECT * FROM product
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
         ORDER BY type ASC, name ASC
         LIMIT #{size} OFFSET #{offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM product
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
     </select>
 
     <select id="findById" resultMap="productResultMap">
-        SELECT * FROM product WHERE id=#{id}
+        SELECT * FROM product WHERE id=#{id} AND gym_id=#{gymId}
     </select>
 
     <select id="findAllActive" resultMap="productResultMap">
         SELECT * FROM product WHERE is_active=1 ORDER BY type ASC, name ASC
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO product (name, type, price, duration_days, session_count, description, is_active)
-        VALUES (#{name}, #{type}, #{price}, #{durationDays}, #{sessionCount}, #{description}, #{active})
+    <insert id="insert" useGeneratedKeys="true" keyProperty="product.id">
+        INSERT INTO product (name, type, price, duration_days, session_count, description, is_active, gym_id)
+        VALUES (#{product.name}, #{product.type}, #{product.price}, #{product.durationDays},
+                #{product.sessionCount}, #{product.description}, #{product.active}, #{gymId})
     </insert>
 
     <update id="update">
         UPDATE product
-        SET name=#{name}, type=#{type}, price=#{price},
-            duration_days=#{durationDays}, session_count=#{sessionCount},
-            description=#{description}, is_active=#{active}
-        WHERE id=#{id}
+        SET name=#{product.name}, type=#{product.type}, price=#{product.price},
+            duration_days=#{product.durationDays}, session_count=#{product.sessionCount},
+            description=#{product.description}, is_active=#{product.active}
+        WHERE id=#{product.id} AND gym_id=#{gymId}
     </update>
 
     <delete id="delete">
-        DELETE FROM product WHERE id=#{id}
+        DELETE FROM product WHERE id=#{id} AND gym_id=#{gymId}
     </delete>
 
 </mapper>

@@ -9,6 +9,7 @@ import com.linkfit.admin.service.StaffService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,23 +28,33 @@ public class MyBatisStaffService implements StaffService {
     }
 
     @Override
-    public List<Staff> findAll(String role, int page, int size) {
-        return staffMapper.findAll(role, page * size, size);
+    public List<Staff> findAll(String role, int page, int size, Long gymId) {
+        return staffMapper.findAll(role, page * size, size, gymId);
     }
 
     @Override
-    public long count(String role) {
-        return staffMapper.count(role);
+    public List<Staff> findTrainerOptions(Long gymId) {
+        return staffMapper.findTrainerOptions(gymId);
     }
 
     @Override
-    public Optional<Staff> findById(String id) {
-        return staffMapper.findById(id);
+    public long count(String role, Long gymId) {
+        return staffMapper.count(role, gymId);
     }
 
     @Override
-    public Optional<Staff> findAppUserByNameAndPhone(String name, String phone) {
-        return staffMapper.findAppUserByNameAndPhone(name, stripNonDigits(phone));
+    public Optional<Staff> findById(String id, Long gymId) {
+        return staffMapper.findById(id, gymId);
+    }
+
+    @Override
+    public List<Staff> searchMemberCandidates(String keyword, Long gymId) {
+        return staffMapper.searchMemberCandidates(gymId, keyword);
+    }
+
+    @Override
+    public Optional<Staff> findMemberCandidate(String id, Long gymId) {
+        return staffMapper.findMemberCandidateById(gymId, id);
     }
 
     @Override
@@ -59,24 +70,31 @@ public class MyBatisStaffService implements StaffService {
     //
     // gymId는 반드시 트레이너 본인이 앱 가입 시 등록한 지점(user_gym)에서 가져온다 — 승격시키는
     // 관리자의 세션 gymId를 쓰면, 트레이너가 실제로 소속되지 않은 지점코드로 crm_users가 발급되어
-    // 나중에 본인 지점코드로 로그인이 안 되는 문제가 생긴다. user_gym이 없으면 컨트롤러 단계에서
-    // 이미 걸러지므로(findTrainerGymId) 여기서는 항상 존재한다고 가정한다.
+    // 나중에 본인 지점코드로 로그인이 안 되는 문제가 생긴다.
+    // 단, callerGymId(승격을 요청한 관리자의 지점)와 트레이너 본인의 소속 지점이 다르면 거부한다 —
+    // 그렇지 않으면 A지점 관리자가 B지점에서 가입한 회원을 트레이너로 지정할 수 있게 되어
+    // "지점 간 데이터/권한이 겹치면 안 된다"는 원칙에 어긋난다(2026-08-25 발견/수정).
     @Override
     @Transactional
-    public Staff promoteToTrainer(String id) {
-        staffMapper.promoteToTrainer(id);
-
+    public Staff promoteToTrainer(String id, Long callerGymId, LocalDate hireDate, String workStatus, LocalDate resignationDate) {
         Long trainerGymId = staffMapper.findGymIdByUserId(id);
         if (trainerGymId == null) {
             throw new IllegalStateException("트레이너 본인의 소속 헬스장 정보가 없습니다.");
         }
+        if (!trainerGymId.equals(callerGymId)) {
+            throw new IllegalStateException("이 사용자는 다른 지점 소속이라 트레이너로 지정할 수 없습니다.");
+        }
+        String resolvedWorkStatus = (workStatus == null || workStatus.isBlank()) ? "ACTIVE" : workStatus;
 
-        Staff staff = staffMapper.findById(id).orElseThrow();
+        staffMapper.promoteToTrainer(id);
+
+        Staff staff = staffMapper.findById(id, trainerGymId).orElseThrow();
         CrmUser existing = crmUserMapper.findByAppUserId(id).orElse(null);
         if (existing != null) {
             if (!existing.isActive()) {
                 crmUserMapper.reactivateAsTrainer(existing.getId(), trainerGymId);
             }
+            crmUserMapper.updateEmploymentByAppUserId(id, hireDate, resolvedWorkStatus, resignationDate);
         } else {
             CrmUser crmUser = new CrmUser();
             crmUser.setId(UUID.randomUUID().toString());
@@ -87,17 +105,27 @@ public class MyBatisStaffService implements StaffService {
             crmUser.setUsername(staff.getEmail() != null && !staff.getEmail().isBlank() ? staff.getEmail() : id);
             crmUser.setPasswordHash(userAuthMapper.findEmailPasswordHash(id).orElse(""));
             crmUser.setRole("trainer");
+            crmUser.setHireDate(hireDate);
+            crmUser.setWorkStatus(resolvedWorkStatus);
+            crmUser.setResignationDate(resignationDate);
             crmUser.setActive(true);
             crmUserMapper.insert(crmUser);
         }
+        staff.setHireDate(hireDate);
+        staff.setWorkStatus(resolvedWorkStatus);
+        staff.setResignationDate(resignationDate);
         return staff;
     }
 
     @Override
-    public Staff update(String id, Staff staff) {
+    @Transactional
+    public Staff update(String id, Staff staff, Long gymId) {
         staff.setId(id);
         staff.setPhone(stripNonDigits(staff.getPhone()));
-        staffMapper.update(staff);
+        staffMapper.update(staff, gymId);
+        String workStatus = (staff.getWorkStatus() == null || staff.getWorkStatus().isBlank()) ? "ACTIVE" : staff.getWorkStatus();
+        crmUserMapper.updateEmploymentByAppUserId(id, staff.getHireDate(), workStatus, staff.getResignationDate());
+        staff.setWorkStatus(workStatus);
         return staff;
     }
 
@@ -111,13 +139,13 @@ public class MyBatisStaffService implements StaffService {
     // CRM(관리자 페이지) 로그인 계정은 비활성화만 한다 (계정 자체는 보존 — 재지정 시 재활성화됨).
     @Override
     @Transactional
-    public void revokeTrainer(String id) {
-        staffMapper.revokeTrainer(id);
+    public void revokeTrainer(String id, Long gymId) {
+        staffMapper.revokeTrainer(id, gymId);
         crmUserMapper.deactivateByAppUserId(id);
     }
 
     @Override
-    public void updateRole(String id, String role) {
-        staffMapper.updateRole(id, role);
+    public void updateRole(String id, String role, Long gymId) {
+        staffMapper.updateRole(id, role, gymId);
     }
 }

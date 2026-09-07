@@ -20,41 +20,41 @@
 
     <select id="findAll" resultMap="consultResultMap">
         SELECT * FROM consult
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
         ORDER BY consult_date DESC, id DESC
         LIMIT #{size} OFFSET #{offset}
     </select>
 
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM consult
-        <where>
-            <if test="type != null and type != ''">AND type=#{type}</if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="type != null and type != ''">AND type=#{type}</if>
     </select>
 
     <select id="findById" resultMap="consultResultMap">
-        SELECT * FROM consult WHERE id=#{id}
+        SELECT * FROM consult WHERE id=#{id} AND gym_id=#{gymId}
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="consult.id">
         INSERT INTO consult
-            (type, name, phone, gender, user_id, interest, content, result, consult_date, staff_id, staff_name)
+            (type, name, phone, gender, user_id, interest, content, result, consult_date, staff_id, staff_name, gym_id)
         VALUES
-            (#{type}, #{name}, #{phone}, #{gender}, #{memberId}, #{interest}, #{content}, #{result}, #{consultDate}, #{staffId}, #{staffName})
+            (#{consult.type}, #{consult.name}, #{consult.phone}, #{consult.gender}, #{consult.memberId},
+             #{consult.interest}, #{consult.content}, #{consult.result}, #{consult.consultDate},
+             #{consult.staffId}, #{consult.staffName}, #{gymId})
     </insert>
 
     <update id="update">
         UPDATE consult
-        SET type=#{type}, name=#{name}, phone=#{phone}, gender=#{gender},
-            interest=#{interest}, content=#{content}, result=#{result},
-            consult_date=#{consultDate}, staff_name=#{staffName}
-        WHERE id=#{id}
+        SET type=#{consult.type}, name=#{consult.name}, phone=#{consult.phone}, gender=#{consult.gender},
+            interest=#{consult.interest}, content=#{consult.content}, result=#{consult.result},
+            consult_date=#{consult.consultDate}, staff_name=#{consult.staffName}
+        WHERE id=#{consult.id} AND gym_id=#{gymId}
     </update>
 
     <delete id="delete">
-        DELETE FROM consult WHERE id=#{id}
+        DELETE FROM consult WHERE id=#{id} AND gym_id=#{gymId}
     </delete>
 
     <select id="countStats" resultType="map">
@@ -62,20 +62,19 @@
             SUM(CASE WHEN type='NEW'      THEN 1 ELSE 0 END) AS newConsult,
             SUM(CASE WHEN type='EXISTING' THEN 1 ELSE 0 END) AS existingConsult
         FROM consult
-        <where>
-            <if test="date != null and date != ''">
-                <choose>
-                    <when test="period == 'weekly'">
-                        AND consult_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
-                                             AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
-                    </when>
-                    <when test="period == 'monthly'">
-                        AND DATE_FORMAT(consult_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
-                    </when>
-                    <otherwise>AND consult_date=#{date}</otherwise>
-                </choose>
-            </if>
-        </where>
+        WHERE gym_id = #{gymId}
+        <if test="date != null and date != ''">
+            <choose>
+                <when test="period == 'weekly'">
+                    AND consult_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
+                                         AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
+                </when>
+                <when test="period == 'monthly'">
+                    AND DATE_FORMAT(consult_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
+                </when>
+                <otherwise>AND consult_date=#{date}</otherwise>
+            </choose>
+        </if>
     </select>
 
 </mapper>

@@ -13,18 +13,18 @@
 
     <select id="findAll" resultMap="gymHolidayResultMap">
         SELECT * FROM gym_holiday
-        WHERE YEAR(holiday_date) = #{year}
+        WHERE YEAR(holiday_date) = #{year} AND gym_id = #{gymId}
         ORDER BY holiday_date ASC
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO gym_holiday (holiday_date, type, name)
-        VALUES (#{holidayDate}, #{type}, #{name})
-        ON DUPLICATE KEY UPDATE name = #{name}
+    <insert id="insert" useGeneratedKeys="true" keyProperty="holiday.id">
+        INSERT INTO gym_holiday (gym_id, holiday_date, type, name)
+        VALUES (#{gymId}, #{holiday.holidayDate}, #{holiday.type}, #{holiday.name})
+        ON DUPLICATE KEY UPDATE name = #{holiday.name}
     </insert>
 
     <delete id="delete">
-        DELETE FROM gym_holiday WHERE id = #{id}
+        DELETE FROM gym_holiday WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
 </mapper>

@@ -20,6 +20,11 @@
         SELECT
             SUM(CASE WHEN u.is_active = 1                                        THEN 1 ELSE 0 END) AS active,
             SUM(CASE WHEN u.is_active = 0                                        THEN 1 ELSE 0 END) AS suspended,
+            <!-- 유효회원: 헬스장/라커/운동복 이용권(membership 전 타입) 중 하나라도 만료되지 않은 회원 -->
+            SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM membership ms
+                 WHERE ms.user_id = u.user_id AND ms.status IS NULL AND ms.end_date >= CURDATE()
+            ) THEN 1 ELSE 0 END) AS valid,
             0 AS expired,
             SUM(CASE WHEN u.is_active = 1 AND up.gender = '남자'                 THEN 1 ELSE 0 END) AS maleActive,
             SUM(CASE WHEN u.is_active = 1 AND up.gender = '여자'                 THEN 1 ELSE 0 END) AS femaleActive,
@@ -27,12 +32,14 @@
             0 AS femaleExpired
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'MEMBER'
     </select>
 
     <select id="memberJoinStats" resultType="map">
         SELECT COUNT(*) AS newJoin
         FROM users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'MEMBER'
         <if test="date != null and date != ''">
             <include refid="memberPeriodFilter"/>
@@ -43,7 +50,7 @@
         SELECT category, COUNT(*) AS cnt, SUM(enrolled) AS enrolled
         FROM class_session
         <where>
-            AND status='OPEN'
+            AND status='OPEN' AND gym_id = #{gymId}
             <if test="date != null and date != ''">
                 <choose>
                     <when test="period == 'weekly'">
@@ -69,20 +76,19 @@
             COALESCE(SUM(CASE WHEN product_type='ITEM'       THEN amount ELSE 0 END), 0) AS items,
             COALESCE(SUM(amount), 0) AS total
         FROM sale s
-        <where>
-            <if test="date != null and date != ''">
-                <choose>
-                    <when test="period == 'weekly'">
-                        AND s.sale_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
-                                            AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
-                    </when>
-                    <when test="period == 'monthly'">
-                        AND DATE_FORMAT(s.sale_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
-                    </when>
-                    <otherwise>AND s.sale_date=#{date}</otherwise>
-                </choose>
-            </if>
-        </where>
+        WHERE s.gym_id = #{gymId}
+        <if test="date != null and date != ''">
+            <choose>
+                <when test="period == 'weekly'">
+                    AND s.sale_date BETWEEN DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY)
+                                        AND DATE_ADD(DATE_SUB(#{date}, INTERVAL WEEKDAY(#{date}) DAY), INTERVAL 6 DAY)
+                </when>
+                <when test="period == 'monthly'">
+                    AND DATE_FORMAT(s.sale_date, '%Y-%m') = DATE_FORMAT(#{date}, '%Y-%m')
+                </when>
+                <otherwise>AND s.sale_date=#{date}</otherwise>
+            </choose>
+        </if>
     </select>
 
     <select id="revenueDetail" resultType="map">
@@ -92,7 +98,7 @@
         LEFT JOIN users u ON s.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         LEFT JOIN product p ON s.product_id = p.id
-        WHERE s.product_type=#{category}
+        WHERE s.product_type=#{category} AND s.gym_id = #{gymId}
         <if test="date != null and date != ''">
             <choose>
                 <when test="period == 'weekly'">
@@ -149,20 +155,28 @@
         SELECT COUNT(DISTINCT er.user_id)
         FROM exercise_records er
         JOIN users u ON u.user_id = er.user_id
+        JOIN user_gym ug ON ug.user_id = er.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'MEMBER'
           AND er.record_date >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
     </select>
 
     <!-- 루틴 이행률: 담당 트레이너가 배정된 회원(분모) 중 최근 N일 내
-         추천 루틴 기준 운동기록을 남긴 회원(분자) -->
+         추천 루틴 기준 운동기록을 남긴 회원(분자). trainer_members/exercise_records엔
+         gym_id가 없어(users 기준) user_gym으로 소속 지점만 필터링 -->
     <select id="routineComplianceStats" resultType="map">
         SELECT
-            (SELECT COUNT(DISTINCT tm.member_id) FROM trainer_members tm) AS assigned,
+            (SELECT COUNT(DISTINCT tm.member_id) FROM trainer_members tm
+               JOIN user_gym ug ON ug.user_id = tm.member_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+            ) AS assigned,
             (SELECT COUNT(DISTINCT er.user_id)
                FROM exercise_records er
+               JOIN user_gym ug ON ug.user_id = er.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
               WHERE er.recommended_routine_id IS NOT NULL
                 AND er.record_date >= DATE_SUB(CURDATE(), INTERVAL #{days} DAY)
-                AND er.user_id IN (SELECT member_id FROM trainer_members)
+                AND er.user_id IN (
+                    SELECT tm2.member_id FROM trainer_members tm2
+                      JOIN user_gym ug2 ON ug2.user_id = tm2.member_id AND ug2.gym_id = #{gymId} AND ug2.is_active = 1
+                )
             ) AS completed
     </select>
 

@@ -42,6 +42,11 @@ public class MyBatisMemberService implements MemberService {
     }
 
     @Override
+    public Map<String, Object> summaryCounts(Long gymId) {
+        return memberMapper.summaryCounts(gymId);
+    }
+
+    @Override
     public List<Member> findAll(String keyword, String status, String tier, Long gymId, List<String> trainerIds,
                                  Integer minDaysLeft, Integer maxDaysLeft, Integer minPtRemaining, Integer minAbsentDays,
                                  int page, int size) {
@@ -139,8 +144,8 @@ public class MyBatisMemberService implements MemberService {
     }
 
     @Override
-    public List<Membership> findMemberships(String id) {
-        return memberMapper.findMembershipsByMemberId(id);
+    public List<Membership> findMemberships(String id, Long gymId) {
+        return memberMapper.findMembershipsByMemberId(id, gymId);
     }
 
     // unlimited: PT처럼 애초에 기간 개념이 없어 무기한 처리되는 구성인지 여부.
@@ -201,16 +206,16 @@ public class MyBatisMemberService implements MemberService {
                     : buildComponent(type, start, membership.getDurationMonths(), membership.getDurationDays());
             membership.setEndDate(c.endDate());
             membership.setRegType(computeRegType(membership.getMemberId(), hasMembershipOrPt, start));
-            memberMapper.insertMembership(membership);
+            memberMapper.insertMembership(membership, gymId);
             if ("PT".equals(type) && membership.getSessionCount() != null && membership.getSessionCount() != 0) {
-                memberMapper.adjustPtSessions(membership.getMemberId(), membership.getSessionCount());
+                memberMapper.adjustPtSessions(membership.getMemberId(), membership.getSessionCount(), gymId);
             }
             String productName = membership.getProductName() != null
                     ? membership.getProductName() : INDIVIDUAL_TYPE_LABEL.getOrDefault(type, type);
             recordSale(membership, type, productName, gymId);
             return;
         }
-        ProductPackage pkg = productPackageService.findById(membership.getPackageId())
+        ProductPackage pkg = productPackageService.findById(membership.getPackageId(), gymId)
                 .orElseThrow(() -> new IllegalArgumentException("상품을 찾을 수 없습니다."));
         java.time.LocalDate start = membership.getStartDate();
         String regType = computeRegType(membership.getMemberId(),
@@ -259,11 +264,11 @@ public class MyBatisMemberService implements MemberService {
             if ("PT".equals(c.type())) {
                 row.setSessionCount(pkg.getPtSessionCount());
             }
-            memberMapper.insertMembership(row);
+            memberMapper.insertMembership(row, gymId);
             // PT 구성이 있으면 실제 PT 잔여 세션(user_profiles.pt_sessions_left)을 함께 충전한다.
             // 이 크레딧이 빠져있으면 결제는 기록되지만 앱에서 실제로 쓸 수 있는 PT 횟수가 늘지 않는다.
             if ("PT".equals(c.type()) && pkg.getPtSessionCount() != null && pkg.getPtSessionCount() != 0) {
-                memberMapper.adjustPtSessions(membership.getMemberId(), pkg.getPtSessionCount());
+                memberMapper.adjustPtSessions(membership.getMemberId(), pkg.getPtSessionCount(), gymId);
             }
             if (isAnchor) {
                 recordSale(row, anchor.type(), pkg.getName(), gymId);
@@ -283,7 +288,7 @@ public class MyBatisMemberService implements MemberService {
         sale.setPaymentMethod(row.getPaymentMethod() != null ? row.getPaymentMethod() : "미지정");
         sale.setSaleDate(row.getStartDate());
         sale.setMemo(row.getMemo());
-        saleMapper.insert(sale);
+        saleMapper.insert(sale, gymId);
 
         // crm_sales.sales_type은 membership/pt/feedback_ticket만 허용하므로,
         // PT를 제외한 모든 구성(이용권/락커/운동복)은 membership으로 매핑한다.
@@ -347,7 +352,7 @@ public class MyBatisMemberService implements MemberService {
     @Override
     @Transactional
     public void transferMembership(Long membershipId, String targetMemberId, Long gymId) {
-        Membership target = memberMapper.findMembershipById(membershipId)
+        Membership target = memberMapper.findMembershipById(membershipId, gymId)
                 .orElseThrow(() -> new IllegalArgumentException("이용권을 찾을 수 없습니다."));
         if ("PT".equals(target.getType())) {
             throw new IllegalArgumentException("PT는 개별 양도 대상이 아닙니다. PT 잔여 이전 기능을 이용해주세요.");
@@ -364,7 +369,7 @@ public class MyBatisMemberService implements MemberService {
         }
 
         if (target.getPackageId() != null) {
-            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId()).stream()
+            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId(), gymId).stream()
                     .filter(m -> target.getPackageId().equals(m.getPackageId())
                             && !m.getId().equals(membershipId) && m.getStatus() == null)
                     .toList();
@@ -378,11 +383,11 @@ public class MyBatisMemberService implements MemberService {
                                 .orElse(siblings.get(0)));
                 memberMapper.updateMembershipAmounts(newHolder.getId(),
                         target.getPrice(), target.getDiscountAmount(), target.getPaidAmount(),
-                        target.getPaymentMethod(), target.getRegType());
+                        target.getPaymentMethod(), target.getRegType(), gymId);
             }
         }
 
-        memberMapper.markMembershipTransferred(membershipId);
+        memberMapper.markMembershipTransferred(membershipId, gymId);
 
         Membership newRow = new Membership();
         newRow.setMemberId(targetMemberId);
@@ -395,7 +400,7 @@ public class MyBatisMemberService implements MemberService {
         newRow.setRegType("TRANSFER");
         String sourceName = sourceMember != null && sourceMember.getName() != null ? sourceMember.getName() : target.getMemberId();
         newRow.setMemo(sourceName + "님으로부터 양도받음");
-        memberMapper.insertMembership(newRow);
+        memberMapper.insertMembership(newRow, gymId);
     }
 
     // PT는 특정 구매건 단위 잔여치를 추적할 수 없는 pool 구조라, 회원 전체 PT 잔여
@@ -418,21 +423,21 @@ public class MyBatisMemberService implements MemberService {
             throw new IllegalArgumentException("이전할 PT 잔여 세션이 없습니다.");
         }
         if (purchased > 0) {
-            memberMapper.adjustPtSessions(sourceMemberId, -purchased);
-            memberMapper.adjustPtSessions(targetMemberId, purchased);
+            memberMapper.adjustPtSessions(sourceMemberId, -purchased, gymId);
+            memberMapper.adjustPtSessions(targetMemberId, purchased, gymId);
         }
         if (service > 0) {
-            memberMapper.adjustServicePtSessions(sourceMemberId, -service);
-            memberMapper.adjustServicePtSessions(targetMemberId, service);
+            memberMapper.adjustServicePtSessions(sourceMemberId, -service, gymId);
+            memberMapper.adjustServicePtSessions(targetMemberId, service, gymId);
         }
     }
 
     @Override
     @Transactional
-    public void deleteMembership(Long id) {
-        Membership target = memberMapper.findMembershipById(id).orElse(null);
+    public void deleteMembership(Long id, Long gymId) {
+        Membership target = memberMapper.findMembershipById(id, gymId).orElse(null);
         if (target != null && target.getPackageId() != null) {
-            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId()).stream()
+            List<Membership> siblings = memberMapper.findMembershipsByMemberId(target.getMemberId(), gymId).stream()
                     .filter(m -> target.getPackageId().equals(m.getPackageId()) && !m.getId().equals(id))
                     .toList();
             boolean holdsAmount = target.getPrice() > 0 || target.getDiscountAmount() > 0 || target.getPaidAmount() > 0;
@@ -449,24 +454,24 @@ public class MyBatisMemberService implements MemberService {
                                 .orElse(siblings.get(0)));
                 memberMapper.updateMembershipAmounts(newHolder.getId(),
                         target.getPrice(), target.getDiscountAmount(), target.getPaidAmount(),
-                        target.getPaymentMethod(), target.getRegType());
+                        target.getPaymentMethod(), target.getRegType(), gymId);
             }
         }
         // PT 구성을 회수하면 등록 시 충전했던 실제 PT 잔여 세션도 그만큼 되돌린다
         // (이미 사용한 세션이 있으면 0 밑으로는 안 내려가고 거기서 멈춘다).
         if (target != null && "PT".equals(target.getType()) && target.getSessionCount() != null && target.getSessionCount() != 0) {
-            memberMapper.adjustPtSessions(target.getMemberId(), -target.getSessionCount());
+            memberMapper.adjustPtSessions(target.getMemberId(), -target.getSessionCount(), gymId);
         }
-        memberMapper.deleteMembership(id);
+        memberMapper.deleteMembership(id, gymId);
     }
 
     @Override
     @Transactional
-    public void deleteMembershipsByPackage(String memberId, Long packageId) {
-        memberMapper.findMembershipsByMemberId(memberId).stream()
+    public void deleteMembershipsByPackage(String memberId, Long packageId, Long gymId) {
+        memberMapper.findMembershipsByMemberId(memberId, gymId).stream()
                 .filter(m -> packageId.equals(m.getPackageId()) && "PT".equals(m.getType())
                         && m.getSessionCount() != null && m.getSessionCount() != 0)
-                .forEach(m -> memberMapper.adjustPtSessions(memberId, -m.getSessionCount()));
-        memberMapper.deleteMembershipsByMemberAndPackage(memberId, packageId);
+                .forEach(m -> memberMapper.adjustPtSessions(memberId, -m.getSessionCount(), gymId));
+        memberMapper.deleteMembershipsByMemberAndPackage(memberId, packageId, gymId);
     }
 }

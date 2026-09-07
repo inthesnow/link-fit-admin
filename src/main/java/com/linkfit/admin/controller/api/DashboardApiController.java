@@ -39,52 +39,64 @@ public class DashboardApiController {
     public ApiResponse<Map<String, Object>> memberStats(
             @RequestParam(defaultValue = "") String date,
             @RequestParam(defaultValue = "daily") String period,
-            @RequestParam(defaultValue = "") String type) {
+            @RequestParam(defaultValue = "") String type,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/members - date={}, period={}", date, period);
-        return ApiResponse.ok(dashboardService.memberStats(date, period));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.memberStats(date, period, gymId));
     }
 
     @GetMapping("/consults")
     public ApiResponse<Map<String, Object>> consultStats(
             @RequestParam(defaultValue = "") String date,
-            @RequestParam(defaultValue = "daily") String period) {
+            @RequestParam(defaultValue = "daily") String period,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/consults - date={}, period={}", date, period);
-        return ApiResponse.ok(dashboardService.consultStats(date, period));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.consultStats(date, period, gymId));
     }
 
     @GetMapping("/classes")
     public ApiResponse<Map<String, Object>> classStats(
             @RequestParam(defaultValue = "") String date,
             @RequestParam(defaultValue = "daily") String period,
-            @RequestParam(defaultValue = "") String type) {
+            @RequestParam(defaultValue = "") String type,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/classes - date={}, period={}", date, period);
-        return ApiResponse.ok(dashboardService.classStats(date, period));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.classStats(date, period, gymId));
     }
 
     @GetMapping("/revenue")
     public ApiResponse<Map<String, Object>> revenueStats(
             @RequestParam(defaultValue = "") String date,
-            @RequestParam(defaultValue = "daily") String period) {
+            @RequestParam(defaultValue = "daily") String period,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/revenue - date={}, period={}", date, period);
-        return ApiResponse.ok(dashboardService.revenueStats(date, period));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.revenueStats(date, period, gymId));
     }
 
     @GetMapping("/revenue/{category}")
     public ApiResponse<Map<String, Object>> revenueDetail(
             @PathVariable String category,
             @RequestParam(defaultValue = "") String date,
-            @RequestParam(defaultValue = "daily") String period) {
+            @RequestParam(defaultValue = "daily") String period,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/revenue/{category} - category={}, date={}, period={}", category, date, period);
-        return ApiResponse.ok(dashboardService.revenueDetail(category, date, period));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.revenueDetail(category, date, period, gymId));
     }
 
     @GetMapping("/attendance")
     public ApiResponse<Map<String, Object>> attendanceStats(
             @RequestParam(defaultValue = "") String date,
             @RequestParam(defaultValue = "daily") String period,
-            @RequestParam(defaultValue = "") String type) {
+            @RequestParam(defaultValue = "") String type,
+            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/attendance - date={}, period={}", date, period);
-        return ApiResponse.ok(dashboardService.attendanceStats(date, period, type));
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
+        return ApiResponse.ok(dashboardService.attendanceStats(date, period, type, gymId));
     }
 
     @GetMapping("/crm-summary")
@@ -112,32 +124,22 @@ public class DashboardApiController {
     }
 
     @GetMapping("/app-usage")
-    public ApiResponse<Map<String, Object>> appUsage(@RequestParam(defaultValue = "30") int days) {
+    public ApiResponse<Map<String, Object>> appUsage(@RequestParam(defaultValue = "30") int days,
+                                                      @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/app-usage - days={}", days);
+        Long gymId = (principal != null) ? principal.getGymId() : 1L;
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("count", dashboardService.appUsageCount(days));
+        data.put("count", dashboardService.appUsageCount(days, gymId));
         data.put("days", days);
         return ApiResponse.ok(data);
     }
 
     @GetMapping("/routine-compliance")
-    public ApiResponse<Map<String, Object>> routineCompliance(@RequestParam(defaultValue = "30") int days) {
+    public ApiResponse<Map<String, Object>> routineCompliance(@RequestParam(defaultValue = "30") int days,
+                                                               @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Dashboard] GET /api/dashboard/routine-compliance - days={}", days);
-        Map<String, Object> data = new LinkedHashMap<>(dashboardService.routineComplianceStats(days));
-        data.put("days", days);
-        return ApiResponse.ok(data);
-    }
-
-    @GetMapping("/reregistration-summary")
-    public ApiResponse<Map<String, Object>> reregistrationSummary(
-            @RequestParam(defaultValue = "30") int days,
-            @AuthenticationPrincipal CrmUserDetails principal) {
-        log.info("[Dashboard] GET /api/dashboard/reregistration-summary - days={}", days);
         Long gymId = (principal != null) ? principal.getGymId() : 1L;
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("pending",     reRegistrationMapper.countByStatusInPeriod(gymId, "pending", days));
-        data.put("in_progress", reRegistrationMapper.countByStatusInPeriod(gymId, "in_progress", days));
-        data.put("hold",        reRegistrationMapper.countByStatusInPeriod(gymId, "hold", days));
+        Map<String, Object> data = new LinkedHashMap<>(dashboardService.routineComplianceStats(days, gymId));
         data.put("days", days);
         return ApiResponse.ok(data);
     }

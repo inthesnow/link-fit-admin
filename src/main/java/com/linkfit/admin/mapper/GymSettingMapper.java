@@ -6,7 +6,7 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface GymSettingMapper {
-    GymSetting find();
-    void upsert(GymSetting setting);
-    void updateOpenStatus(@Param("isOpen") boolean isOpen);
+    GymSetting find(@Param("gymId") Long gymId);
+    void upsert(@Param("setting") GymSetting setting, @Param("gymId") Long gymId);
+    void updateOpenStatus(@Param("isOpen") boolean isOpen, @Param("gymId") Long gymId);
 }

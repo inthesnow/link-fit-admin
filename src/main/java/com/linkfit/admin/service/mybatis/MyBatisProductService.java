@@ -18,35 +18,35 @@ public class MyBatisProductService implements ProductService {
     }
 
     @Override
-    public List<Product> findAll(String type, int page, int size) {
-        return productMapper.findAll(type, page * size, size);
+    public List<Product> findAll(String type, int page, int size, Long gymId) {
+        return productMapper.findAll(type, page * size, size, gymId);
     }
 
     @Override
-    public long count(String type) {
-        return productMapper.count(type);
+    public long count(String type, Long gymId) {
+        return productMapper.count(type, gymId);
     }
 
     @Override
-    public Optional<Product> findById(Long id) {
-        return productMapper.findById(id);
+    public Optional<Product> findById(Long id, Long gymId) {
+        return productMapper.findById(id, gymId);
     }
 
     @Override
-    public Product save(Product product) {
-        productMapper.insert(product);
+    public Product save(Product product, Long gymId) {
+        productMapper.insert(product, gymId);
         return product;
     }
 
     @Override
-    public Product update(Long id, Product product) {
+    public Product update(Long id, Product product, Long gymId) {
         product.setId(id);
-        productMapper.update(product);
+        productMapper.update(product, gymId);
         return product;
     }
 
     @Override
-    public void delete(Long id) {
-        productMapper.delete(id);
+    public void delete(Long id, Long gymId) {
+        productMapper.delete(id, gymId);
     }
 }

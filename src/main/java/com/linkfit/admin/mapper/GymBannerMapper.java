@@ -8,9 +8,9 @@ import java.util.List;
 
 @Mapper
 public interface GymBannerMapper {
-    List<GymBanner> findAll();
-    void insert(GymBanner banner);
-    void delete(@Param("id") Long id);
-    void updateSortOrder(@Param("id") Long id, @Param("sortOrder") int sortOrder);
-    void toggleActive(@Param("id") Long id, @Param("isActive") boolean isActive);
+    List<GymBanner> findAll(@Param("gymId") Long gymId);
+    void insert(@Param("banner") GymBanner banner, @Param("gymId") Long gymId);
+    void delete(@Param("id") Long id, @Param("gymId") Long gymId);
+    void updateSortOrder(@Param("id") Long id, @Param("sortOrder") int sortOrder, @Param("gymId") Long gymId);
+    void toggleActive(@Param("id") Long id, @Param("isActive") boolean isActive, @Param("gymId") Long gymId);
 }

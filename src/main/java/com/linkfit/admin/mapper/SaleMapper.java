@@ -10,38 +10,44 @@ import java.util.Optional;
 
 @Mapper
 public interface SaleMapper {
-    Map<String, Object> revenueStats(@Param("date") String date, @Param("period") String period);
+    Map<String, Object> revenueStats(@Param("date") String date, @Param("period") String period,
+                                     @Param("gymId") Long gymId);
     List<Map<String, Object>> revenueDetail(@Param("category") String category,
                                             @Param("date") String date,
-                                            @Param("period") String period);
-    void insert(Sale sale);
+                                            @Param("period") String period,
+                                            @Param("gymId") Long gymId);
+    void insert(@Param("sale") Sale sale, @Param("gymId") Long gymId);
 
-    Optional<Sale> findById(@Param("id") Long id);
+    Optional<Sale> findById(@Param("id") Long id, @Param("gymId") Long gymId);
 
     // 환불 처리 (전액/부분 환불, 판매 기록은 삭제하지 않고 이력 보존)
-    void refund(@Param("id") Long id, @Param("refundAmount") int refundAmount, @Param("reason") String reason);
+    void refund(@Param("id") Long id, @Param("refundAmount") int refundAmount, @Param("reason") String reason,
+               @Param("gymId") Long gymId);
 
     // 결제 내역 페이징
     List<Map<String, Object>> findPaged(@Param("type") String type,
                                         @Param("startDate") String startDate,
                                         @Param("endDate") String endDate,
                                         @Param("offset") int offset,
-                                        @Param("size") int size);
+                                        @Param("size") int size,
+                                        @Param("gymId") Long gymId);
     long countPaged(@Param("type") String type,
                     @Param("startDate") String startDate,
-                    @Param("endDate") String endDate);
+                    @Param("endDate") String endDate,
+                    @Param("gymId") Long gymId);
 
     // 환불 처리 (논리 삭제)
-    void deleteById(@Param("id") Long id);
+    void deleteById(@Param("id") Long id, @Param("gymId") Long gymId);
 
     // CSV export
     List<Map<String, Object>> findForExport(@Param("type") String type,
                                              @Param("startDate") String startDate,
-                                             @Param("endDate") String endDate);
+                                             @Param("endDate") String endDate,
+                                             @Param("gymId") Long gymId);
 
     // 구독(tier) 분포
-    List<Map<String, Object>> tierDistribution();
+    List<Map<String, Object>> tierDistribution(@Param("gymId") Long gymId);
 
     // 월별 매출 추이 (최근 N개월)
-    List<Map<String, Object>> monthlyTrend(@Param("months") int months);
+    List<Map<String, Object>> monthlyTrend(@Param("months") int months, @Param("gymId") Long gymId);
 }

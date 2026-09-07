@@ -21,6 +21,10 @@
             <h1 class="page-title">PT 관리</h1>
         </div>
         <div class="header-right">
+            <button class="btn btn-secondary" onclick="exportList()" style="font-size:12px">
+                <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+                엑셀 내보내기
+            </button>
             <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-secondary);cursor:pointer">
                 <input type="checkbox" id="lowStockFilter" onchange="currentPage=0;loadList()">
                 잔여 5회 미만만 보기
@@ -143,6 +147,11 @@ async function loadStats() {
     ]);
     document.getElementById('totalPt').textContent      = total.data?.total ?? '-';
     document.getElementById('lowStockCount').textContent = low.data?.total ?? '-';
+}
+
+function exportList() {
+    const lowStock = document.getElementById('lowStockFilter').checked;
+    window.location.href = `/api/pt/export?lowStock=${lowStock}`;
 }
 
 async function loadList() {

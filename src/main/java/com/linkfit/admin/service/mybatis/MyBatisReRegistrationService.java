@@ -1,5 +1,6 @@
 package com.linkfit.admin.service.mybatis;
 
+import com.linkfit.admin.domain.CrmReregistrationNote;
 import com.linkfit.admin.domain.Membership;
 import com.linkfit.admin.domain.ReRegistration;
 import com.linkfit.admin.mapper.MemberMapper;
@@ -37,10 +38,12 @@ public class MyBatisReRegistrationService implements ReRegistrationService {
     @Override
     public Map<String, Object> membershipSummary(Long gymId) {
         Map<String, Object> raw = mapper.summaryByMembership(gymId);
+        int expiring = toInt(raw.get("expiring"));
+        int expired  = toInt(raw.get("expired"));
         return Map.of(
-                "target",    toInt(raw.get("target")),
-                "completed", toInt(raw.get("completed")),
-                "expired",   toInt(raw.get("expired"))
+                "target",   expiring + expired,
+                "expiring", expiring,
+                "expired",  expired
         );
     }
 
@@ -49,23 +52,30 @@ public class MyBatisReRegistrationService implements ReRegistrationService {
     }
 
     @Override
-    public Optional<ReRegistration> findById(String id) {
-        return mapper.findById(id);
+    public Optional<ReRegistration> findById(String id, Long gymId) {
+        return mapper.findById(id, gymId);
     }
 
     @Override
-    public void updateStatus(String id, String status) {
-        mapper.updateStatus(id, status, null);
+    public void assign(String id, String assignedTo, Long gymId) {
+        mapper.assign(id, assignedTo, gymId);
     }
 
     @Override
-    public void updateMemo(String id, String memo) {
-        mapper.updateMemo(id, memo);
+    public List<CrmReregistrationNote> findNotes(String reregistrationId, Long gymId) {
+        return mapper.findNotesByReregistrationId(reregistrationId, gymId);
     }
 
     @Override
-    public void assign(String id, String assignedTo) {
-        mapper.assign(id, assignedTo);
+    public CrmReregistrationNote addNote(String reregistrationId, Long gymId, String authorId, String content) {
+        CrmReregistrationNote note = new CrmReregistrationNote();
+        note.setId(UUID.randomUUID().toString());
+        note.setReregistrationId(reregistrationId);
+        note.setGymId(gymId);
+        note.setAuthorId(authorId);
+        note.setContent(content);
+        mapper.insertNote(note);
+        return note;
     }
 
     @Override

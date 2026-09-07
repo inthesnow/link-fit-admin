@@ -25,11 +25,10 @@
             COALESCE(SUM(CASE WHEN product_type='ITEM'       THEN amount - refund_amount ELSE 0 END), 0) AS items,
             COALESCE(SUM(amount - refund_amount), 0) AS total
         FROM sale s
-        <where>
-            <if test="date != null and date != ''">
-                <include refid="periodFilter"/>
-            </if>
-        </where>
+        WHERE s.gym_id = #{gymId}
+        <if test="date != null and date != ''">
+            <include refid="periodFilter"/>
+        </if>
     </select>
 
     <select id="revenueDetail" resultType="map">
@@ -40,16 +39,17 @@
         LEFT JOIN users u ON s.user_id = u.user_id
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
         LEFT JOIN product p ON s.product_id = p.id
-        WHERE s.product_type=#{category}
+        WHERE s.product_type=#{category} AND s.gym_id = #{gymId}
         <if test="date != null and date != ''">
             <include refid="periodFilter"/>
         </if>
         ORDER BY s.sale_date DESC, s.id DESC
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO sale (user_id, product_id, product_name, product_type, amount, payment_method, sale_date, memo)
-        VALUES (#{memberId}, #{productId}, #{productName}, #{productType}, #{amount}, #{paymentMethod}, #{saleDate}, #{memo})
+    <insert id="insert" useGeneratedKeys="true" keyProperty="sale.id">
+        INSERT INTO sale (user_id, product_id, product_name, product_type, amount, payment_method, sale_date, memo, gym_id)
+        VALUES (#{sale.memberId}, #{sale.productId}, #{sale.productName}, #{sale.productType}, #{sale.amount},
+                #{sale.paymentMethod}, #{sale.saleDate}, #{sale.memo}, #{gymId})
     </insert>
 
     <resultMap id="saleResultMap" type="Sale">
@@ -69,16 +69,17 @@
     </resultMap>
 
     <select id="findById" resultMap="saleResultMap">
-        SELECT * FROM sale WHERE id = #{id}
+        SELECT * FROM sale WHERE id = #{id} AND gym_id = #{gymId}
     </select>
 
     <update id="refund">
         UPDATE sale SET refund_amount = #{refundAmount}, refunded_at = NOW(), refund_reason = #{reason}
-        WHERE id = #{id}
+        WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
     <sql id="salesWhere">
         <where>
+            AND s.gym_id = #{gymId}
             <if test="type != null and type != ''">AND s.product_type = #{type}</if>
             <if test="startDate != null and startDate != ''">AND s.sale_date &gt;= #{startDate}</if>
             <if test="endDate != null and endDate != ''">AND s.sale_date &lt;= #{endDate}</if>
@@ -106,7 +107,7 @@
 
     <!-- 완전 삭제 (환불 처리와 별개, 잘못 등록된 내역 정리용) -->
     <delete id="deleteById">
-        DELETE FROM sale WHERE id = #{id}
+        DELETE FROM sale WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
 
     <!-- CSV export (최대 5000건) -->
@@ -130,6 +131,7 @@
             COUNT(*) AS cnt
         FROM users u
         LEFT JOIN user_profiles up ON u.user_id = up.user_id
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
         WHERE u.role = 'MEMBER' AND u.is_active = 1 AND u.deleted_at IS NULL
         GROUP BY up.tier
         ORDER BY FIELD(up.tier, 'INTENSIVE_FIT','REGULAR_FIT','LIGHT_FIT','BASIC') DESC
@@ -145,6 +147,7 @@
             COALESCE(SUM(s.amount - s.refund_amount), 0) AS total
         FROM sale s
         WHERE s.sale_date >= DATE_SUB(CURDATE(), INTERVAL #{months} MONTH)
+          AND s.gym_id = #{gymId}
         GROUP BY DATE_FORMAT(s.sale_date, '%Y-%m')
         ORDER BY ym ASC
     </select>

@@ -1,5 +1,6 @@
 package com.linkfit.admin.domain;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public class CrmUser {
@@ -14,6 +15,9 @@ public class CrmUser {
     private String secondPasswordHash;  // 2차 비밀번호 (카테고리 잠금 해제용, 로그인 비밀번호와 별도)
     private boolean mustChangePassword; // 지점코드 발급 시 기본 비밀번호로 만들어진 계정 — 최초 로그인 시 1/2차 비밀번호 변경 강제
     private String role;         // super_admin | gym_admin | trainer
+    private LocalDate hireDate;          // 트레이너 입사일 (앱 회원가입일과 별개)
+    private String workStatus;           // ACTIVE(재직) | LEAVE(휴직) | RESIGNED(퇴사)
+    private LocalDate resignationDate;   // workStatus=RESIGNED일 때만 의미 있음
     private String lockedCategories;    // 콤마 구분 카테고리 키, 예: "crm-sales,revenue"
     private boolean active;
     private LocalDateTime createdAt;
@@ -42,6 +46,12 @@ public class CrmUser {
     public void setMustChangePassword(boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public LocalDate getHireDate() { return hireDate; }
+    public void setHireDate(LocalDate hireDate) { this.hireDate = hireDate; }
+    public String getWorkStatus() { return workStatus; }
+    public void setWorkStatus(String workStatus) { this.workStatus = workStatus; }
+    public LocalDate getResignationDate() { return resignationDate; }
+    public void setResignationDate(LocalDate resignationDate) { this.resignationDate = resignationDate; }
     public String getLockedCategories() { return lockedCategories; }
     public void setLockedCategories(String lockedCategories) { this.lockedCategories = lockedCategories; }
 

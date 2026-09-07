@@ -30,13 +30,6 @@
           LEFT JOIN user_profiles rup ON m.receiver_type = 'member' AND rup.user_id = m.receiver_id
     </sql>
 
-    <select id="findReceived" resultMap="msgMap">
-        <include refid="msgJoin"/>
-         WHERE m.gym_id = #{gymId} AND m.receiver_id = #{receiverId}
-         ORDER BY m.created_at DESC
-         LIMIT #{size} OFFSET #{offset}
-    </select>
-
     <select id="findSent" resultMap="msgMap">
         <include refid="msgJoin"/>
          WHERE m.gym_id = #{gymId} AND m.sender_id = #{senderId}
@@ -51,11 +44,6 @@
          LIMIT #{size} OFFSET #{offset}
     </select>
 
-    <select id="countReceived" resultType="long">
-        SELECT COUNT(*) FROM crm_messages
-         WHERE gym_id = #{gymId} AND receiver_id = #{receiverId}
-    </select>
-
     <select id="countSent" resultType="long">
         SELECT COUNT(*) FROM crm_messages
          WHERE gym_id = #{gymId} AND sender_id = #{senderId}
@@ -63,11 +51,6 @@
 
     <select id="countNotices" resultType="long">
         SELECT COUNT(*) FROM crm_messages WHERE gym_id = #{gymId} AND is_notice = 1
-    </select>
-
-    <select id="countUnread" resultType="long">
-        SELECT COUNT(*) FROM crm_messages
-         WHERE gym_id = #{gymId} AND receiver_id = #{receiverId} AND is_read = 0
     </select>
 
     <select id="findById" resultMap="msgMap">
@@ -87,13 +70,85 @@
         UPDATE crm_messages SET is_read = 1 WHERE id = #{id} AND gym_id = #{gymId}
     </update>
 
-    <update id="markAllRead">
-        UPDATE crm_messages SET is_read = 1
-         WHERE gym_id = #{gymId} AND receiver_id = #{receiverId} AND is_read = 0
-    </update>
-
     <delete id="delete">
         DELETE FROM crm_messages WHERE id = #{id} AND gym_id = #{gymId}
     </delete>
+
+    <!-- "읽지않은 쪽지함" — 회원이 지점 전체(receiver_id='GYM') 앞으로 보낸 미확인 쪽지를
+         회원별로 묶어서 대화목록 형태로 보여준다. crm_messages.id가 시간순이 아닌 UUID라
+         상관 서브쿼리로 최신 메시지/미확인 개수를 각각 구한다. -->
+    <select id="findUnreadMemberThreads" resultType="map">
+        SELECT cm.sender_id AS memberId,
+               up.name AS memberName,
+               up.contact AS memberPhone,
+               (SELECT c2.content FROM crm_messages c2
+                 WHERE c2.gym_id = #{gymId} AND c2.sender_type = 'member' AND c2.sender_id = cm.sender_id
+                   AND c2.receiver_type = 'admin'
+                 ORDER BY c2.created_at DESC, c2.id DESC LIMIT 1) AS lastContent,
+               (SELECT c2.created_at FROM crm_messages c2
+                 WHERE c2.gym_id = #{gymId} AND c2.sender_type = 'member' AND c2.sender_id = cm.sender_id
+                   AND c2.receiver_type = 'admin'
+                 ORDER BY c2.created_at DESC, c2.id DESC LIMIT 1) AS lastAt,
+               (SELECT COUNT(*) FROM crm_messages c3
+                 WHERE c3.gym_id = #{gymId} AND c3.sender_type = 'member' AND c3.sender_id = cm.sender_id
+                   AND c3.receiver_type = 'admin' AND c3.is_read = 0) AS unreadCount
+          FROM (SELECT DISTINCT sender_id FROM crm_messages
+                 WHERE gym_id = #{gymId} AND sender_type = 'member' AND receiver_type = 'admin' AND is_read = 0) cm
+          LEFT JOIN user_profiles up ON up.user_id = cm.sender_id
+         ORDER BY lastAt DESC
+    </select>
+
+    <select id="countUnreadMemberMessages" resultType="long">
+        SELECT COUNT(*) FROM crm_messages
+         WHERE gym_id = #{gymId} AND sender_type = 'member' AND receiver_type = 'admin' AND is_read = 0
+    </select>
+
+    <update id="markAllMemberMessagesRead">
+        UPDATE crm_messages SET is_read = 1
+         WHERE gym_id = #{gymId} AND sender_type = 'member' AND receiver_type = 'admin' AND is_read = 0
+    </update>
+
+    <select id="findThreadWithMember" resultMap="msgMap">
+        <include refid="msgJoin"/>
+         WHERE m.gym_id = #{gymId}
+           AND ((m.sender_type = 'member' AND m.sender_id = #{memberId})
+             OR (m.receiver_type = 'member' AND m.receiver_id = #{memberId}))
+         ORDER BY m.created_at ASC
+    </select>
+
+    <update id="markMemberMessagesRead">
+        UPDATE crm_messages SET is_read = 1
+         WHERE gym_id = #{gymId} AND sender_type = 'member' AND sender_id = #{memberId} AND is_read = 0
+    </update>
+
+    <!-- 단체쪽지 발송 대상 조회 — "유효 회원" 판정 기준은 회원관리 집계 패널/정렬과 동일
+         (membership 아무 타입이나 status IS NULL AND end_date >= 오늘인 게 하나라도 있으면 유효) -->
+    <sql id="broadcastTargetFilter">
+        FROM users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        LEFT JOIN user_profiles up ON up.user_id = u.user_id
+        WHERE u.role = 'MEMBER'
+        <if test="gender != null and gender != ''">
+            AND up.gender = #{gender}
+        </if>
+        <if test="validity == 'valid'">
+            AND EXISTS (SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id
+                         AND ms.status IS NULL AND ms.end_date >= CURDATE())
+        </if>
+        <if test="validity == 'expired'">
+            AND NOT EXISTS (SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id
+                             AND ms.status IS NULL AND ms.end_date >= CURDATE())
+        </if>
+    </sql>
+
+    <select id="findBroadcastTargets" resultType="string">
+        SELECT u.user_id
+        <include refid="broadcastTargetFilter"/>
+    </select>
+
+    <select id="countBroadcastTargets" resultType="long">
+        SELECT COUNT(*)
+        <include refid="broadcastTargetFilter"/>
+    </select>
 
 </mapper>

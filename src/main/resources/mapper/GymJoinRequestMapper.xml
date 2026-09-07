@@ -43,6 +43,12 @@
         </if>
     </select>
 
+    <select id="countApprovedAppUsers" resultType="long">
+        SELECT COUNT(*) FROM user_gym ug
+         WHERE ug.gym_id = #{gymId} AND ug.status = 'APPROVED'
+           AND EXISTS (SELECT 1 FROM user_auth ua WHERE ua.user_id = ug.user_id)
+    </select>
+
     <select id="findById" resultMap="requestMap">
         <include refid="baseJoin"/>
          WHERE ug.id = #{id} LIMIT 1

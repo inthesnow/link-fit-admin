@@ -122,4 +122,16 @@
         VALUES (#{conversationId}, #{senderId}, #{content}, 0, NOW())
     </insert>
 
+    <select id="findMessagesByTrainer" resultType="map">
+        SELECT cm.content AS content, cm.created_at AS createdAt,
+               (cm.sender_id = mc.trainer_id) AS fromTrainer,
+               COALESCE(up.name, mc.member_id) AS memberName
+          FROM chat_message cm
+          JOIN message_conversation mc ON mc.id = cm.conversation_id
+          LEFT JOIN user_profiles up ON up.user_id = mc.member_id
+         WHERE mc.trainer_id = #{trainerUserId}
+         ORDER BY cm.created_at DESC
+         LIMIT #{limit}
+    </select>
+
 </mapper>

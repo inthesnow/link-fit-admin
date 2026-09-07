@@ -18,41 +18,41 @@ public class MyBatisConsultService implements ConsultService {
     }
 
     @Override
-    public List<Consult> findAll(String type, int page, int size) {
-        return consultMapper.findAll(type, page * size, size);
+    public List<Consult> findAll(String type, int page, int size, Long gymId) {
+        return consultMapper.findAll(type, page * size, size, gymId);
     }
 
     @Override
-    public long count(String type) {
-        return consultMapper.count(type);
+    public long count(String type, Long gymId) {
+        return consultMapper.count(type, gymId);
     }
 
     @Override
-    public Optional<Consult> findById(Long id) {
-        return consultMapper.findById(id);
+    public Optional<Consult> findById(Long id, Long gymId) {
+        return consultMapper.findById(id, gymId);
     }
 
     @Override
-    public Consult saveNew(Consult consult) {
+    public Consult saveNew(Consult consult, Long gymId) {
         consult.setType("NEW");
         consult.setPhone(stripNonDigits(consult.getPhone()));
-        consultMapper.insert(consult);
+        consultMapper.insert(consult, gymId);
         return consult;
     }
 
     @Override
-    public Consult saveExisting(Consult consult) {
+    public Consult saveExisting(Consult consult, Long gymId) {
         consult.setType("EXISTING");
         consult.setPhone(stripNonDigits(consult.getPhone()));
-        consultMapper.insert(consult);
+        consultMapper.insert(consult, gymId);
         return consult;
     }
 
     @Override
-    public Consult update(Long id, Consult consult) {
+    public Consult update(Long id, Consult consult, Long gymId) {
         consult.setId(id);
         consult.setPhone(stripNonDigits(consult.getPhone()));
-        consultMapper.update(consult);
+        consultMapper.update(consult, gymId);
         return consult;
     }
 
@@ -63,7 +63,7 @@ public class MyBatisConsultService implements ConsultService {
     }
 
     @Override
-    public void delete(Long id) {
-        consultMapper.delete(id);
+    public void delete(Long id, Long gymId) {
+        consultMapper.delete(id, gymId);
     }
 }

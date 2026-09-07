@@ -9,9 +9,9 @@ import java.util.Optional;
 
 @Mapper
 public interface ProductPackageMapper {
-    List<ProductPackage> findAll();
-    Optional<ProductPackage> findById(@Param("id") Long id);
-    void insert(ProductPackage pkg);
-    void update(ProductPackage pkg);
-    void delete(@Param("id") Long id);
+    List<ProductPackage> findAll(@Param("gymId") Long gymId);
+    Optional<ProductPackage> findById(@Param("id") Long id, @Param("gymId") Long gymId);
+    void insert(@Param("pkg") ProductPackage pkg, @Param("gymId") Long gymId);
+    void update(@Param("pkg") ProductPackage pkg, @Param("gymId") Long gymId);
+    void delete(@Param("id") Long id, @Param("gymId") Long gymId);
 }

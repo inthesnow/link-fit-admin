@@ -44,7 +44,7 @@ public class MembershipApiController {
         if (targetMemberId == null || targetMemberId.isBlank()) {
             return ApiResponse.error("양도받을 회원을 선택해주세요.");
         }
-        Membership target = memberMapper.findMembershipById(id).orElse(null);
+        Membership target = memberMapper.findMembershipById(id, principal.getGymId()).orElse(null);
         if (target == null) {
             return ApiResponse.error("이용권을 찾을 수 없습니다.");
         }
@@ -86,35 +86,38 @@ public class MembershipApiController {
     }
 
     @PatchMapping("/{id}/end-date")
-    public ApiResponse<Void> updateEndDate(@PathVariable Long id, @RequestBody Map<String, String> body) {
+    public ApiResponse<Void> updateEndDate(@PathVariable Long id, @RequestBody Map<String, String> body,
+                                            @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Membership] PATCH /api/memberships/{}/end-date", id);
-        memberMapper.updateMembershipEndDate(id, body.get("endDate"));
+        memberMapper.updateMembershipEndDate(id, body.get("endDate"), principal.getGymId());
         return ApiResponse.ok();
     }
 
     @PatchMapping("/{id}/adjust-period")
-    public ApiResponse<Map<String, String>> adjustPeriod(@PathVariable Long id, @RequestBody Map<String, Integer> body) {
+    public ApiResponse<Map<String, String>> adjustPeriod(@PathVariable Long id, @RequestBody Map<String, Integer> body,
+                                                           @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Membership] PATCH /api/memberships/{}/adjust-period - body={}", id, body);
-        Membership ms = memberMapper.findMembershipById(id)
+        Membership ms = memberMapper.findMembershipById(id, principal.getGymId())
                 .orElseThrow(() -> new IllegalArgumentException("이용권을 찾을 수 없습니다."));
         int months = body.getOrDefault("months", 0);
         int days   = body.getOrDefault("days", 0);
         java.time.LocalDate newEndDate = ms.getEndDate().plusMonths(months).plusDays(days);
-        memberMapper.updateMembershipEndDate(id, newEndDate.toString());
+        memberMapper.updateMembershipEndDate(id, newEndDate.toString(), principal.getGymId());
         return ApiResponse.ok(Map.of("endDate", newEndDate.toString()));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResponse<Void> delete(@PathVariable Long id, @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Membership] DELETE /api/memberships/{}", id);
-        memberService.deleteMembership(id);
+        memberService.deleteMembership(id, principal.getGymId());
         return ApiResponse.ok();
     }
 
     @DeleteMapping("/member/{memberId}/package/{packageId}")
-    public ApiResponse<Void> deleteByPackage(@PathVariable String memberId, @PathVariable Long packageId) {
+    public ApiResponse<Void> deleteByPackage(@PathVariable String memberId, @PathVariable Long packageId,
+                                              @AuthenticationPrincipal CrmUserDetails principal) {
         log.info("[Membership] DELETE all by package - memberId={}, packageId={}", memberId, packageId);
-        memberService.deleteMembershipsByPackage(memberId, packageId);
+        memberService.deleteMembershipsByPackage(memberId, packageId, principal.getGymId());
         return ApiResponse.ok();
     }
 

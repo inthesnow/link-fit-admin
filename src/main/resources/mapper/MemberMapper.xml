@@ -42,7 +42,7 @@
                up.name, up.contact AS phone, up.gender, up.birth_date, up.member_type,
                up.tier, up.trainer_id, tp.name AS trainer_name, up.pt_sessions_left, up.service_pt_sessions_left,
                <include refid="statusCase"/> AS status,
-               DATE(u.created_at) AS join_date,
+               CASE WHEN up.join_date_unknown = 1 THEN NULL ELSE DATE(u.created_at) END AS join_date,
                (SELECT start_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS membership_start,
                (SELECT end_date FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL ORDER BY ms.end_date DESC LIMIT 1) AS membership_end,
                (SELECT COALESCE(p.name, pkg.name) FROM membership ms
@@ -100,7 +100,10 @@
             AND up.tier = #{tier}
         </if>
         <include refid="extraFilters"/>
-        ORDER BY u.created_at DESC
+        ORDER BY
+            EXISTS (SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id
+                     AND ms.status IS NULL AND ms.end_date >= CURDATE()) DESC,
+            up.name ASC
         LIMIT #{size} OFFSET #{offset}
     </select>
 
@@ -142,14 +145,25 @@
            AND u.deleted_at IS NULL
     </select>
 
+    <!-- 회원 일괄 등록(엑셀)에서 이름+연락처로 기존 앱 회원을 찾아 지점에 연결(앱 활성화)하기 위함 —
+         u.role 제한 없음(트레이너로 앱에 먼저 가입한 사람이 나중에 회원으로도 잡히는 경우 대비X,
+         MEMBER만 대상으로 한정) -->
+    <select id="findIdByNameAndPhone" resultType="string">
+        SELECT u.user_id FROM user_profiles up
+          JOIN users u ON u.user_id = up.user_id
+         WHERE up.name = #{name} AND up.contact = #{phone}
+           AND u.role = 'MEMBER' AND u.deleted_at IS NULL
+         LIMIT 1
+    </select>
+
     <insert id="insertUser">
         INSERT INTO users (user_id, email, role, is_active)
         VALUES (#{id}, #{email}, 'MEMBER', 1)
     </insert>
 
     <insert id="insertProfile">
-        INSERT INTO user_profiles (user_id, name, contact, gender, birth_date, member_type, tier)
-        VALUES (#{id}, #{name}, #{phone}, #{gender}, #{birthDate}, #{memberType}, #{tier})
+        INSERT INTO user_profiles (user_id, name, contact, gender, birth_date, join_date_unknown, member_type, tier)
+        VALUES (#{id}, #{name}, #{phone}, #{gender}, #{birthDate}, #{joinDateUnknown}, #{memberType}, #{tier})
     </insert>
 
     <insert id="insertUserGym">
@@ -260,7 +274,7 @@
         FROM membership ms
         LEFT JOIN product p ON ms.product_id = p.id
         LEFT JOIN product_package pkg ON ms.package_id = pkg.id
-        WHERE ms.user_id=#{memberId}
+        WHERE ms.user_id=#{memberId} AND ms.gym_id=#{gymId}
         ORDER BY ms.start_date DESC
     </select>
 
@@ -269,12 +283,12 @@
         FROM membership ms
         LEFT JOIN product p ON ms.product_id = p.id
         LEFT JOIN product_package pkg ON ms.package_id = pkg.id
-        WHERE ms.id=#{id}
+        WHERE ms.id=#{id} AND ms.gym_id=#{gymId}
     </select>
 
-    <insert id="insertMembership" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO membership (user_id, product_id, package_id, locker_id, type, start_date, end_date, price, discount_amount, paid_amount, payment_method, reg_type, session_count, status, memo)
-        VALUES (#{memberId}, #{productId}, #{packageId}, #{lockerId}, #{type}, #{startDate}, #{endDate}, #{price}, #{discountAmount}, #{paidAmount}, #{paymentMethod}, #{regType}, #{sessionCount}, #{status}, #{memo})
+    <insert id="insertMembership" useGeneratedKeys="true" keyProperty="m.id">
+        INSERT INTO membership (user_id, gym_id, product_id, package_id, locker_id, type, start_date, end_date, price, discount_amount, paid_amount, payment_method, reg_type, session_count, status, memo)
+        VALUES (#{m.memberId}, #{gymId}, #{m.productId}, #{m.packageId}, #{m.lockerId}, #{m.type}, #{m.startDate}, #{m.endDate}, #{m.price}, #{m.discountAmount}, #{m.paidAmount}, #{m.paymentMethod}, #{m.regType}, #{m.sessionCount}, #{m.status}, #{m.memo})
     </insert>
 
     <!-- 신규/재유입/재등록 분류를 위한 이 회원의 과거 이용권/PT 이력 요약.
@@ -286,24 +300,24 @@
     </select>
 
     <update id="updateMembershipEndDate">
-        UPDATE membership SET end_date=#{endDate} WHERE id=#{id}
+        UPDATE membership SET end_date=#{endDate} WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
     <update id="updateMembershipAmounts">
-        UPDATE membership SET price=#{price}, discount_amount=#{discountAmount}, paid_amount=#{paidAmount}, payment_method=#{paymentMethod}, reg_type=#{regType} WHERE id=#{id}
+        UPDATE membership SET price=#{price}, discount_amount=#{discountAmount}, paid_amount=#{paidAmount}, payment_method=#{paymentMethod}, reg_type=#{regType} WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
     <!-- 양도: 원 회원의 행은 삭제하지 않고 상태만 TRANSFERRED로 변경해 이력을 보존한다 -->
     <update id="markMembershipTransferred">
-        UPDATE membership SET status='TRANSFERRED' WHERE id=#{id}
+        UPDATE membership SET status='TRANSFERRED' WHERE id=#{id} AND gym_id=#{gymId}
     </update>
 
     <delete id="deleteMembership">
-        DELETE FROM membership WHERE id=#{id}
+        DELETE FROM membership WHERE id=#{id} AND gym_id=#{gymId}
     </delete>
 
     <delete id="deleteMembershipsByMemberAndPackage">
-        DELETE FROM membership WHERE user_id=#{memberId} AND package_id=#{packageId}
+        DELETE FROM membership WHERE user_id=#{memberId} AND package_id=#{packageId} AND gym_id=#{gymId}
     </delete>
 
 
@@ -335,11 +349,33 @@
     </select>
 
     <select id="countExpiringMemberships" resultType="long">
-        SELECT COUNT(*)
+        SELECT COUNT(DISTINCT ms.user_id)
           FROM membership ms
           JOIN user_gym ug ON ug.user_id = ms.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
          WHERE ms.status IS NULL
            AND ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL #{days} DAY)
+    </select>
+
+    <!-- 회원관리 페이지 상단 집계 패널: 전체/유효/만료/만료예정(30일 고정) — 목록(count/findAll)과
+         동일하게 role IN (MEMBER,TRAINER)을 모집단으로 삼아 "전체"와 합이 맞도록 한다. -->
+    <select id="summaryCounts" resultType="map">
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id
+                 AND ms.status IS NULL AND ms.end_date >= CURDATE()
+            ) THEN 1 ELSE 0 END) AS valid,
+            SUM(CASE WHEN NOT EXISTS (
+                SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id
+                 AND ms.status IS NULL AND ms.end_date >= CURDATE()
+            ) THEN 1 ELSE 0 END) AS expired,
+            SUM(CASE WHEN EXISTS (
+                SELECT 1 FROM membership ms WHERE ms.user_id = u.user_id AND ms.status IS NULL
+                 AND ms.end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+            ) THEN 1 ELSE 0 END) AS expiring
+        FROM users u
+        JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        WHERE u.role IN ('MEMBER', 'TRAINER')
     </select>
 
     <select id="findTickets" resultType="MemberTicket">
@@ -440,6 +476,7 @@
                tup.name AS trainer_name
           FROM users u
           JOIN user_profiles up ON up.user_id = u.user_id
+          JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
           LEFT JOIN user_profiles tup ON tup.user_id = up.trainer_id
          WHERE u.role = 'MEMBER' AND u.is_active = 1
            AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) > 0
@@ -452,17 +489,24 @@
         SELECT COUNT(*)
           FROM users u
           JOIN user_profiles up ON up.user_id = u.user_id
+          JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
          WHERE u.role = 'MEMBER' AND u.is_active = 1
            AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) > 0
         <if test="lowStock">AND (COALESCE(up.pt_sessions_left, 0) + COALESCE(up.service_pt_sessions_left, 0)) &lt; 5</if>
     </select>
 
     <update id="adjustPtSessions">
-        UPDATE user_profiles SET pt_sessions_left = GREATEST(0, pt_sessions_left + #{delta}) WHERE user_id = #{memberId}
+        UPDATE user_profiles up
+        JOIN user_gym ug ON ug.user_id = up.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET up.pt_sessions_left = GREATEST(0, up.pt_sessions_left + #{delta})
+        WHERE up.user_id = #{memberId}
     </update>
 
     <update id="adjustServicePtSessions">
-        UPDATE user_profiles SET service_pt_sessions_left = GREATEST(0, service_pt_sessions_left + #{delta}) WHERE user_id = #{memberId}
+        UPDATE user_profiles up
+        JOIN user_gym ug ON ug.user_id = up.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1
+        SET up.service_pt_sessions_left = GREATEST(0, up.service_pt_sessions_left + #{delta})
+        WHERE up.user_id = #{memberId}
     </update>
 
 </mapper>

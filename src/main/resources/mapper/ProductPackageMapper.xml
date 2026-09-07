@@ -24,40 +24,40 @@
     </resultMap>
 
     <select id="findAll" resultMap="packageResultMap">
-        SELECT * FROM product_package ORDER BY created_at DESC
+        SELECT * FROM product_package WHERE gym_id = #{gymId} ORDER BY created_at DESC
     </select>
 
     <select id="findById" resultMap="packageResultMap">
-        SELECT * FROM product_package WHERE id = #{id}
+        SELECT * FROM product_package WHERE id = #{id} AND gym_id = #{gymId}
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="pkg.id">
         INSERT INTO product_package
-            (name, price, description, is_active,
+            (gym_id, name, price, description, is_active,
              membership_enabled, membership_duration_months, membership_duration_days,
              pt_enabled, pt_session_count,
              locker_enabled, locker_duration_months, locker_duration_days,
              uniform_enabled, uniform_duration_months, uniform_duration_days)
         VALUES
-            (#{name}, #{price}, #{description}, #{active},
-             #{membershipEnabled}, #{membershipDurationMonths}, #{membershipDurationDays},
-             #{ptEnabled}, #{ptSessionCount},
-             #{lockerEnabled}, #{lockerDurationMonths}, #{lockerDurationDays},
-             #{uniformEnabled}, #{uniformDurationMonths}, #{uniformDurationDays})
+            (#{gymId}, #{pkg.name}, #{pkg.price}, #{pkg.description}, #{pkg.active},
+             #{pkg.membershipEnabled}, #{pkg.membershipDurationMonths}, #{pkg.membershipDurationDays},
+             #{pkg.ptEnabled}, #{pkg.ptSessionCount},
+             #{pkg.lockerEnabled}, #{pkg.lockerDurationMonths}, #{pkg.lockerDurationDays},
+             #{pkg.uniformEnabled}, #{pkg.uniformDurationMonths}, #{pkg.uniformDurationDays})
     </insert>
 
     <update id="update">
         UPDATE product_package
-        SET name=#{name}, price=#{price}, description=#{description}, is_active=#{active},
-            membership_enabled=#{membershipEnabled}, membership_duration_months=#{membershipDurationMonths}, membership_duration_days=#{membershipDurationDays},
-            pt_enabled=#{ptEnabled}, pt_session_count=#{ptSessionCount},
-            locker_enabled=#{lockerEnabled}, locker_duration_months=#{lockerDurationMonths}, locker_duration_days=#{lockerDurationDays},
-            uniform_enabled=#{uniformEnabled}, uniform_duration_months=#{uniformDurationMonths}, uniform_duration_days=#{uniformDurationDays}
-        WHERE id=#{id}
+        SET name=#{pkg.name}, price=#{pkg.price}, description=#{pkg.description}, is_active=#{pkg.active},
+            membership_enabled=#{pkg.membershipEnabled}, membership_duration_months=#{pkg.membershipDurationMonths}, membership_duration_days=#{pkg.membershipDurationDays},
+            pt_enabled=#{pkg.ptEnabled}, pt_session_count=#{pkg.ptSessionCount},
+            locker_enabled=#{pkg.lockerEnabled}, locker_duration_months=#{pkg.lockerDurationMonths}, locker_duration_days=#{pkg.lockerDurationDays},
+            uniform_enabled=#{pkg.uniformEnabled}, uniform_duration_months=#{pkg.uniformDurationMonths}, uniform_duration_days=#{pkg.uniformDurationDays}
+        WHERE id=#{pkg.id} AND gym_id=#{gymId}
     </update>
 
     <delete id="delete">
-        DELETE FROM product_package WHERE id=#{id}
+        DELETE FROM product_package WHERE id=#{id} AND gym_id=#{gymId}
     </delete>
 
 </mapper>

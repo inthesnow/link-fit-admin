@@ -11,6 +11,10 @@ public class Member {
     private LocalDate birthDate;
     private String status;       // ACTIVE, SUSPENDED
     private LocalDate joinDate;
+    // true면 실제 가입일을 모른다는 뜻(타사 CRM 이관 회원 — Excel에 가입일 컬럼 자체가 없어
+    // users.created_at은 "이관 작업을 실행한 시각"일 뿐 진짜 가입일이 아님). 이 경우 joinDate를
+    // created_at으로 채우지 않고 화면엔 공란으로 표시한다. 수동 등록/앱 자율가입은 항상 false.
+    private boolean joinDateUnknown;
     private LocalDate membershipStart;
     private LocalDate membershipEnd;
     private String memo;
@@ -44,6 +48,8 @@ public class Member {
     public void setStatus(String status) { this.status = status; }
     public LocalDate getJoinDate() { return joinDate; }
     public void setJoinDate(LocalDate joinDate) { this.joinDate = joinDate; }
+    public boolean isJoinDateUnknown() { return joinDateUnknown; }
+    public void setJoinDateUnknown(boolean joinDateUnknown) { this.joinDateUnknown = joinDateUnknown; }
     public LocalDate getMembershipEnd() { return membershipEnd; }
     public void setMembershipEnd(LocalDate membershipEnd) { this.membershipEnd = membershipEnd; }
     public String getMemo() { return memo; }

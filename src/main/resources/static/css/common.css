@@ -53,26 +53,18 @@ body {
 .sidebar-logo {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 20px 16px 16px;
+    padding: 16px;
     border-bottom: 1px solid var(--sb-border);
     flex-shrink: 0;
 }
 
-.logo-icon-sm {
-    width: 30px; height: 30px;
-    background: rgba(59,130,246,0.2);
+.sidebar-logo-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    background: #fff;
     border-radius: 8px;
-    display: flex; align-items: center; justify-content: center;
-    color: #93C5FD;
-    flex-shrink: 0;
-}
-
-.logo-text { font-size: 15px; font-weight: 700; color: #F1F5F9; letter-spacing: -0.3px; }
-.logo-badge {
-    font-size: 9px; font-weight: 700;
-    background: var(--accent); color: #fff;
-    border-radius: 4px; padding: 2px 5px; letter-spacing: 0.5px;
+    padding: 8px 10px;
 }
 
 .sidebar-user {
@@ -199,6 +191,8 @@ body {
 .btn-success:hover { background: #D1FAE5; }
 
 .btn svg { width: 15px; height: 15px; }
+
+.btn:disabled { opacity: .5; cursor: not-allowed; box-shadow: none; }
 
 /* ── Date nav ─────────────────────────────────────────── */
 .date-nav { display: flex; align-items: center; gap: 8px; }
@@ -567,6 +561,7 @@ tbody td:first-child { color: var(--text-primary); font-weight: 500; }
 }
 .form-input::placeholder, .form-textarea::placeholder { color: var(--text-muted); }
 .form-textarea { resize: vertical; min-height: 80px; }
+.form-input:disabled, .form-select:disabled, .form-textarea:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ── Loading skeleton ─────────────────────────────────── */
 .skeleton {

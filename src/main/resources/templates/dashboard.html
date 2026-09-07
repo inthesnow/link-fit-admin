@@ -60,7 +60,10 @@
     <!-- ① 전체회원수 / 다운로드 받은 회원 / 실 어플사용 회원 -->
     <div class="kpi-row-3">
         <div class="kpi-card">
-            <div class="kpi-label">전체 회원 수</div>
+            <div class="kpi-card-header">
+                <div class="kpi-label">전체 회원 수</div>
+                <a class="kpi-card-link" href="/members">회원관리에서 보기 →</a>
+            </div>
             <div class="kpi-value" id="kpiTotal">-<span class="kpi-unit">명</span></div>
         </div>
         <div class="kpi-card pending">
@@ -80,50 +83,35 @@
         </div>
     </div>
 
-    <!-- ② 만료예정 회원 / 정지회원 / 재등록 대상자 (기간설정 가능) -->
+    <!-- ② 만료예정 회원 / 유효회원 / 정지회원 (기간설정 가능) -->
     <div class="kpi-row-3">
         <div class="kpi-card">
             <div class="kpi-card-header">
                 <div class="kpi-label">만료예정 회원</div>
-                <select class="kpi-period-select" id="expiringDays" onchange="loadExpiring()">
-                    <option value="7">7일 이내</option>
-                    <option value="14">14일 이내</option>
-                    <option value="30" selected>30일 이내</option>
-                </select>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <select class="kpi-period-select" id="expiringDays" onchange="loadExpiring()">
+                        <option value="7">7일 이내</option>
+                        <option value="14">14일 이내</option>
+                        <option value="30" selected>30일 이내</option>
+                    </select>
+                    <a class="kpi-card-link" href="/reregistration">바로가기 →</a>
+                </div>
             </div>
             <div class="kpi-value" id="kpiExpiring">-<span class="kpi-unit">명</span></div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">정지 회원</div>
-            <div class="kpi-value" id="kpiSuspended">-<span class="kpi-unit">명</span></div>
+            <div class="kpi-card-header">
+                <div class="kpi-label">유효 회원</div>
+                <a class="kpi-card-link" href="/members">회원관리에서 보기 →</a>
+            </div>
+            <div class="kpi-value" id="kpiValid">-<span class="kpi-unit">명</span></div>
         </div>
         <div class="kpi-card">
             <div class="kpi-card-header">
-                <div class="kpi-label">재등록 대상자</div>
-                <select class="kpi-period-select" id="reregDays" onchange="loadRereg()">
-                    <option value="7">최근 7일</option>
-                    <option value="30" selected>최근 30일</option>
-                    <option value="90">최근 90일</option>
-                </select>
+                <div class="kpi-label">정지 회원</div>
+                <a class="kpi-card-link" href="/reregistration">바로가기 →</a>
             </div>
-            <div>
-                <span class="rereg-total" id="reregTotal">-</span>
-                <span class="rereg-unit">명</span>
-            </div>
-            <div class="rereg-list" id="reregList">
-                <div class="rereg-item">
-                    <span><span class="rereg-dot" style="background:#3B82F6"></span>상담 진행</span>
-                    <span class="rereg-count" id="reregActive">-명</span>
-                </div>
-                <div class="rereg-item">
-                    <span><span class="rereg-dot" style="background:#F59E0B"></span>상담 예정</span>
-                    <span class="rereg-count" id="reregPending">-명</span>
-                </div>
-                <div class="rereg-item">
-                    <span><span class="rereg-dot" style="background:#9CA3AF"></span>보류</span>
-                    <span class="rereg-count" id="reregHold">-명</span>
-                </div>
-            </div>
+            <div class="kpi-value" id="kpiSuspended">-<span class="kpi-unit">명</span></div>
         </div>
     </div>
 
@@ -145,10 +133,13 @@
         <div class="widget">
             <div class="kpi-card-header">
                 <div class="widget-title" style="margin-bottom:0">루틴 이행률</div>
-                <select class="kpi-period-select" id="routineDays" onchange="loadRoutineDonut()">
-                    <option value="7">최근 7일</option>
-                    <option value="30" selected>최근 30일</option>
-                </select>
+                <div style="display:flex;align-items:center;gap:8px">
+                    <select class="kpi-period-select" id="routineDays" onchange="loadRoutineDonut()">
+                        <option value="7">최근 7일</option>
+                        <option value="30" selected>최근 30일</option>
+                    </select>
+                    <a class="kpi-card-link" href="/attendance">바로가기 →</a>
+                </div>
             </div>
             <div class="donut-wrap">
                 <canvas id="routineDonut"></canvas>
@@ -166,7 +157,7 @@
             <div class="big-num" id="feedbackPending">-<span class="big-unit">건</span></div>
             <div class="widget-sub-label">미처리 요청</div>
             <div style="margin-top:12px">
-                <a href="/feedback" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:500">
+                <a href="/staff" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:500">
                     바로가기
                     <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
                 </a>
@@ -241,10 +232,12 @@ async function loadMemberKPI() {
         const { data } = await res.json();
         const active    = data.active    || 0;
         const suspended = data.suspended || 0;
+        const valid     = data.valid     || 0;
         const newJoin   = data.newJoin   || 0;
         const total     = active + suspended;
 
         document.getElementById('kpiTotal').innerHTML     = `${total.toLocaleString()}<span class="kpi-unit">명</span>`;
+        document.getElementById('kpiValid').innerHTML     = `${valid.toLocaleString()}<span class="kpi-unit">명</span>`;
         document.getElementById('kpiSuspended').innerHTML = `${suspended.toLocaleString()}<span class="kpi-unit">명</span>`;
         document.getElementById('kpiNew').innerHTML       = `${newJoin.toLocaleString()}<span class="kpi-unit">명</span>`;
     } catch(e) {}
@@ -267,23 +260,6 @@ async function loadExpiring() {
         const res = await fetch(`/api/dashboard/expiring?days=${days}`);
         const { data } = await res.json();
         document.getElementById('kpiExpiring').innerHTML = `${(data.count||0).toLocaleString()}<span class="kpi-unit">명</span>`;
-    } catch(e) {}
-}
-
-// ── 재등록 대상자 (기간 설정) ─────────────────────────────
-async function loadRereg() {
-    try {
-        const days = document.getElementById('reregDays').value;
-        const res = await fetch(`/api/dashboard/reregistration-summary?days=${days}`);
-        if (!res.ok) return;
-        const { data } = await res.json();
-        if (!data) return;
-
-        const total = (data.pending || 0) + (data.in_progress || 0) + (data.hold || 0);
-        document.getElementById('reregTotal').textContent   = total;
-        document.getElementById('reregActive').textContent  = (data.in_progress || 0) + '명';
-        document.getElementById('reregPending').textContent = (data.pending     || 0) + '명';
-        document.getElementById('reregHold').textContent    = (data.hold        || 0) + '명';
     } catch(e) {}
 }
 
@@ -468,7 +444,6 @@ function loadAll() {
     loadMemberKPI();
     loadAppUsage();
     loadExpiring();
-    loadRereg();
     loadRoutineDonut();
     loadCrmSummary();
     loadRevenue();

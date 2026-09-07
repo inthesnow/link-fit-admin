@@ -157,57 +157,72 @@ public class MyBatisMemberImportService implements MemberImportService {
                     continue;
                 }
 
-                if (memberMapper.existsByNameAndPhone(name, phone)) {
+                // 이름+연락처가 기존 앱 회원과 일치하면(어느 지점 소속이든) 새 회원을 만들지 않고
+                // 그 계정을 이 지점에 연결한다("앱 활성화") — 이미 이 지점에 연결돼 있으면 진짜 중복.
+                Optional<String> existingId = memberMapper.findIdByNameAndPhone(name, phone);
+                boolean isExistingAppUser = existingId.isPresent();
+                if (isExistingAppUser && memberMapper.existsInGym(existingId.get(), gymId)) {
                     result.put("success", false);
-                    messages.add("동일한 이름+연락처의 회원이 이미 존재해 건너뛰었습니다.");
+                    messages.add("이미 이 지점에 등록된 회원입니다.");
                     result.put("messages", messages);
                     results.add(result);
                     continue;
                 }
 
-                // 회원 생성 자체가 실패하면 이 행은 완전히 실패(success=false) — 재업로드 가능.
-                // 회원은 만들어졌는데 이용권/락커/운동복 중 일부만 실패한 경우는 success=true로 두고
-                // messages에 실패 사유를 남긴다 — 회원이 이미 생겼으니 재업로드하면 "이미 존재" 처리되어
-                // 혼동을 줄 수 있고, 상세정보 화면에서 수동으로 이어서 등록하면 되기 때문.
+                // 회원 생성/연결 자체가 실패하면 이 행은 완전히 실패(success=false) — 재업로드 가능.
+                // 회원은 연결됐는데 이용권/락커/운동복 중 일부만 실패한 경우는 success=true로 두고
+                // messages에 실패 사유를 남긴다 — 재업로드하면 "이미 등록됨" 처리되어 혼동을 줄 수 있고,
+                // 상세정보 화면에서 수동으로 이어서 등록하면 되기 때문.
                 try {
-                    Member member = new Member();
-                    member.setName(name);
-                    member.setPhone(phone);
-                    member.setGender(str(row, 2, formatter));
-                    member.setBirthDate(parseDate(row, 3, formatter));
-                    String email = str(row, 4, formatter);
-                    member.setEmail(email == null || email.isBlank() ? null : email);
-                    member.setId(UUID.randomUUID().toString());
-                    member.setMemberType(null);
-                    member.setTier("BASIC");
+                    String memberId;
+                    if (isExistingAppUser) {
+                        memberId = existingId.get();
+                        memberMapper.insertUserGym(memberId, gymId);
+                        messages.add("기존 앱 회원을 지점에 연결했습니다 (앱 활성화)");
+                    } else {
+                        Member member = new Member();
+                        member.setName(name);
+                        member.setPhone(phone);
+                        member.setGender(str(row, 2, formatter));
+                        member.setBirthDate(parseDate(row, 3, formatter));
+                        String email = str(row, 4, formatter);
+                        member.setEmail(email == null || email.isBlank() ? null : email);
+                        member.setId(UUID.randomUUID().toString());
+                        member.setMemberType(null);
+                        member.setTier("BASIC");
+                        // 엑셀엔 가입일 컬럼이 없다 — created_at(=이관 작업 실행 시각)을 가입일처럼
+                        // 보여주면 "오늘 가입한 회원"으로 오해하게 되므로, 화면엔 공란으로 표시한다.
+                        member.setJoinDateUnknown(true);
 
-                    memberMapper.insertUser(member);
-                    memberMapper.insertProfile(member);
-                    memberMapper.insertUserGym(member.getId(), gymId);
-                    messages.add("회원 등록 완료");
+                        memberMapper.insertUser(member);
+                        memberMapper.insertProfile(member);
+                        memberMapper.insertUserGym(member.getId(), gymId);
+                        messages.add("회원 등록 완료");
+                        memberId = member.getId();
+                    }
                     result.put("success", true);
 
                     try {
-                        importMembership(row, formatter, member.getId(), gymId, messages);
+                        importMembership(row, formatter, memberId, gymId, messages);
                     } catch (Exception e) {
                         log.error("[MemberImport] {}행 이용권 등록 실패", excelRowNumber, e);
                         messages.add("이용권 등록 중 오류가 발생해 건너뛰었습니다: " + e.getMessage());
                     }
                     try {
-                        importLocker(row, formatter, member.getId(), gymId, messages);
+                        importLocker(row, formatter, memberId, gymId, messages);
                     } catch (Exception e) {
                         log.error("[MemberImport] {}행 락커 배정 실패", excelRowNumber, e);
                         messages.add("락커 배정 중 오류가 발생해 건너뛰었습니다: " + e.getMessage());
                     }
                     try {
-                        importUniform(row, formatter, member.getId(), messages);
+                        importUniform(row, formatter, memberId, gymId, messages);
                     } catch (Exception e) {
                         log.error("[MemberImport] {}행 운동복 등록 실패", excelRowNumber, e);
                         messages.add("운동복 등록 중 오류가 발생해 건너뛰었습니다: " + e.getMessage());
                     }
                 } catch (Exception e) {
-                    log.error("[MemberImport] {}행 회원 등록 실패", excelRowNumber, e);
-                    messages.add("회원 등록 중 오류: " + e.getMessage());
+                    log.error("[MemberImport] {}행 회원 등록/연결 실패", excelRowNumber, e);
+                    messages.add("회원 등록/연결 중 오류: " + e.getMessage());
                     result.put("success", false);
                 }
 
@@ -236,12 +251,15 @@ public class MyBatisMemberImportService implements MemberImportService {
             return;
         }
         LocalDate end = parseDate(row, 8, formatter);
+        boolean alreadyExpired = false;
         if (end == null) {
             if ("PT".equals(type)) {
                 end = start.plusDays(PT_UNLIMITED_DURATION_DAYS); // PT는 기간이 아니라 횟수로 관리
             } else {
-                messages.add("이용종료일이 없어 이용권을 등록하지 않았습니다.");
-                return;
+                // 이용종료일이 비어있는 경우는 타사 CRM에서 이미 만료된 회원을 그렇게 표기하던 관행 —
+                // 임의의 종료일을 추정하지 않고, 오늘 이전 날짜로 등록해 만료 상태로 분류한다.
+                end = LocalDate.now().minusDays(1);
+                alreadyExpired = true;
             }
         }
 
@@ -256,17 +274,22 @@ public class MyBatisMemberImportService implements MemberImportService {
         m.setPaidAmount(intVal(row, 12, formatter, 0));
         m.setPaymentMethod(blankToNull(str(row, 13, formatter)));
         m.setRegType("NEW");
-        m.setStatus(null);
+        // 이용종료일 미기재로 만든 행은 status를 'EXPIRED_UNKNOWN'으로 표시해 다른 곳의
+        // "status IS NULL"(=정상/유효 이용권) 조건에서 자동으로 빠지게 한다 — 별도 예외 처리
+        // 없이도 유효회원 집계/만료일 표시 등에서 "이용권 없음(=만료)"과 동일하게 취급됨.
+        m.setStatus(alreadyExpired ? "EXPIRED_UNKNOWN" : null);
         m.setMemo("타사 CRM 이관 등록");
         if ("PT".equals(type)) {
             Integer sessionCount = intValOrNull(row, 9, formatter);
             m.setSessionCount(sessionCount);
         }
-        memberMapper.insertMembership(m);
+        memberMapper.insertMembership(m, gymId);
         if ("PT".equals(type) && m.getSessionCount() != null && m.getSessionCount() != 0) {
-            memberMapper.adjustPtSessions(memberId, m.getSessionCount());
+            memberMapper.adjustPtSessions(memberId, m.getSessionCount(), gymId);
         }
-        messages.add("이용권(" + typeLabel + ") 등록 완료");
+        messages.add(alreadyExpired
+                ? "이용권(" + typeLabel + ") 등록 완료 (이용종료일 미기재 — 이미 만료된 회원으로 분류)"
+                : "이용권(" + typeLabel + ") 등록 완료");
 
         String trainerName = str(row, 14, formatter);
         if (trainerName != null && !trainerName.isBlank()) {
@@ -304,11 +327,11 @@ public class MyBatisMemberImportService implements MemberImportService {
         m.setEndDate(end);
         m.setRegType("NEW");
         m.setMemo("타사 CRM 이관 등록");
-        memberMapper.insertMembership(m);
+        memberMapper.insertMembership(m, gymId);
         messages.add(lockerNumber + "번 락커 배정 완료");
     }
 
-    private void importUniform(Row row, DataFormatter formatter, String memberId, List<String> messages) {
+    private void importUniform(Row row, DataFormatter formatter, String memberId, Long gymId, List<String> messages) {
         LocalDate start = parseDate(row, 18, formatter);
         LocalDate end = parseDate(row, 19, formatter);
         if (start == null && end == null) return; // 운동복 정보 없음(선택)
@@ -325,7 +348,7 @@ public class MyBatisMemberImportService implements MemberImportService {
         m.setRegType("NEW");
         String memo = str(row, 20, formatter);
         m.setMemo(memo != null && !memo.isBlank() ? memo : "타사 CRM 이관 등록(운동복)");
-        memberMapper.insertMembership(m);
+        memberMapper.insertMembership(m, gymId);
         messages.add("운동복 등록 완료");
     }
 

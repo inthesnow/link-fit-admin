@@ -12,11 +12,13 @@ public interface TicketPurchaseMapper {
                                       @Param("startDate") String startDate,
                                       @Param("endDate") String endDate,
                                       @Param("offset") int offset,
-                                      @Param("size") int size);
+                                      @Param("size") int size,
+                                      @Param("gymId") Long gymId);
 
     long count(@Param("productId") String productId,
                @Param("startDate") String startDate,
-               @Param("endDate") String endDate);
+               @Param("endDate") String endDate,
+               @Param("gymId") Long gymId);
 
-    List<Map<String, Object>> statsByType(@Param("months") int months);
+    List<Map<String, Object>> statsByType(@Param("months") int months, @Param("gymId") Long gymId);
 }

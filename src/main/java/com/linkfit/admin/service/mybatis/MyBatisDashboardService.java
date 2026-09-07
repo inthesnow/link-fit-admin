@@ -27,23 +27,23 @@ public class MyBatisDashboardService implements DashboardService {
     }
 
     @Override
-    public Map<String, Object> memberStats(String date, String period) {
+    public Map<String, Object> memberStats(String date, String period, Long gymId) {
         String d = defaultDate(date);
-        Map<String, Object> stats = new HashMap<>(dashboardMapper.memberStats());
-        Map<String, Object> join = dashboardMapper.memberJoinStats(d, period);
+        Map<String, Object> stats = new HashMap<>(dashboardMapper.memberStats(gymId));
+        Map<String, Object> join = dashboardMapper.memberJoinStats(d, period, gymId);
         stats.putAll(join);
         return stats;
     }
 
     @Override
-    public Map<String, Object> consultStats(String date, String period) {
-        Map<String, Object> result = consultMapper.countStats(defaultDate(date), period);
+    public Map<String, Object> consultStats(String date, String period, Long gymId) {
+        Map<String, Object> result = consultMapper.countStats(defaultDate(date), period, gymId);
         return result != null ? result : Map.of("newConsult", 0, "existingConsult", 0);
     }
 
     @Override
-    public Map<String, Object> classStats(String date, String period) {
-        List<Map<String, Object>> rows = dashboardMapper.classStats(defaultDate(date), period);
+    public Map<String, Object> classStats(String date, String period, Long gymId) {
+        List<Map<String, Object>> rows = dashboardMapper.classStats(defaultDate(date), period, gymId);
         Map<String, Object> result = new HashMap<>();
         long totalCnt = 0; long totalEnrolled = 0;
         for (Map<String, Object> row : rows) {
@@ -57,36 +57,36 @@ public class MyBatisDashboardService implements DashboardService {
     }
 
     @Override
-    public Map<String, Object> revenueStats(String date, String period) {
-        Map<String, Object> result = dashboardMapper.revenueStats(defaultDate(date), period);
+    public Map<String, Object> revenueStats(String date, String period, Long gymId) {
+        Map<String, Object> result = dashboardMapper.revenueStats(defaultDate(date), period, gymId);
         return result != null ? result : Map.of("membership", 0, "groupClass", 0, "pt", 0, "locker", 0, "items", 0, "total", 0);
     }
 
     @Override
-    public Map<String, Object> revenueDetail(String category, String date, String period) {
-        List<Map<String, Object>> items = dashboardMapper.revenueDetail(category, defaultDate(date), period);
+    public Map<String, Object> revenueDetail(String category, String date, String period, Long gymId) {
+        List<Map<String, Object>> items = dashboardMapper.revenueDetail(category, defaultDate(date), period, gymId);
         long total = items.stream().mapToLong(r -> toLong(r.get("amount"))).sum();
         return Map.of("category", category, "items", items, "total", total);
     }
 
     @Override
-    public Map<String, Object> attendanceStats(String date, String period, String type) {
+    public Map<String, Object> attendanceStats(String date, String period, String type, Long gymId) {
         String d = defaultDate(date);
-        Map<String, Object> stats = new HashMap<>(attendanceMapper.countStats(d, period, type));
-        Map<String, Object> frozen = attendanceMapper.countFrozen(d);
+        Map<String, Object> stats = new HashMap<>(attendanceMapper.countStats(d, period, type, gymId));
+        Map<String, Object> frozen = attendanceMapper.countFrozen(d, gymId);
         if (frozen != null) stats.putAll(frozen);
         return stats;
     }
 
     @Override
-    public Long appUsageCount(int days) {
-        Long count = dashboardMapper.countAppActiveMembers(days);
+    public Long appUsageCount(int days, Long gymId) {
+        Long count = dashboardMapper.countAppActiveMembers(days, gymId);
         return count != null ? count : 0L;
     }
 
     @Override
-    public Map<String, Object> routineComplianceStats(int days) {
-        Map<String, Object> result = dashboardMapper.routineComplianceStats(days);
+    public Map<String, Object> routineComplianceStats(int days, Long gymId) {
+        Map<String, Object> result = dashboardMapper.routineComplianceStats(days, gymId);
         return result != null ? result : Map.of("assigned", 0, "completed", 0);
     }
 

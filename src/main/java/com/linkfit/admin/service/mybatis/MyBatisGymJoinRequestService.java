@@ -30,6 +30,11 @@ public class MyBatisGymJoinRequestService implements GymJoinRequestService {
     }
 
     @Override
+    public long countApprovedAppUsers(Long gymId) {
+        return mapper.countApprovedAppUsers(gymId);
+    }
+
+    @Override
     public Optional<GymJoinRequest> findById(Long id) {
         return mapper.findById(id);
     }

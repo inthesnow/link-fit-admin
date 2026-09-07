@@ -427,11 +427,21 @@
         </div>
         <div class="modal-body">
             <div class="form-grid">
-                <div class="form-group">
+                <!-- 등록 모드: 이름 검색 → 드롭박스에서 회원 선택 (기존 이름+전화번호 직접입력 방식은
+                     포맷 차이(공백/하이픈 등)로 "회원이 아닙니다" 오탐이 잦아 검색-선택 방식으로 교체) -->
+                <div class="form-group full" id="sMemberSearchGroup">
+                    <label class="form-label">회원 검색 (이름) *</label>
+                    <input type="text" class="form-input" id="sMemberSearch" placeholder="이름을 입력해 검색하세요" oninput="debounceMemberSearch()" autocomplete="off">
+                    <select class="form-select" id="sMemberResults" size="5" style="margin-top:6px;display:none" onchange="onMemberCandidateSelected()"></select>
+                    <div id="sMemberSelectedInfo" style="display:none;margin-top:6px;padding:8px 10px;background:var(--bg-hover,#f5f6f8);border-radius:6px;font-size:12px;color:var(--text-secondary)"></div>
+                </div>
+
+                <!-- 수정 모드: 기존 이름/전화번호/이메일 직접 수정 -->
+                <div class="form-group" id="sNameGroup" style="display:none">
                     <label class="form-label">이름 *</label>
                     <input type="text" class="form-input" id="sName" placeholder="홍길동">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="sPhoneGroup" style="display:none">
                     <label class="form-label">전화번호 *</label>
                     <input type="text" class="form-input" id="sPhone" placeholder="010-0000-0000" oninput="this.value=formatPhoneAsTyped(this.value)">
                 </div>
@@ -439,8 +449,27 @@
                     <label class="form-label">이메일 <span style="color:var(--text-muted);font-size:11px">(로그인 ID)</span></label>
                     <input type="email" class="form-input" id="sEmail" placeholder="email@linkfit.com">
                 </div>
+
+                <!-- 공통: 입사일 / 근무상태(재직·휴직·퇴사) / 퇴사일 -->
+                <div class="form-group">
+                    <label class="form-label">입사일</label>
+                    <input type="date" class="form-input" id="sHireDate">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">근무상태</label>
+                    <select class="form-select" id="sWorkStatus" onchange="onWorkStatusChange()">
+                        <option value="ACTIVE">재직</option>
+                        <option value="LEAVE">휴직</option>
+                        <option value="RESIGNED">퇴사</option>
+                    </select>
+                </div>
+                <div class="form-group" id="sResignationDateGroup" style="display:none">
+                    <label class="form-label">퇴사일 *</label>
+                    <input type="date" class="form-input" id="sResignationDate">
+                </div>
+
                 <div class="form-group full" id="sRegisterHint">
-                    <span style="color:var(--text-muted);font-size:11px">이름과 전화번호로 이미 앱에 가입된 사용자를 찾아 트레이너로 지정합니다. 앱 회원가입이 먼저 되어 있어야 합니다.</span>
+                    <span style="color:var(--text-muted);font-size:11px">이름을 검색해 이 지점에 가입 승인된 회원 중에서 선택하면 트레이너로 지정합니다.</span>
                 </div>
             </div>
         </div>
@@ -558,12 +587,20 @@ const pageSize = 10;
 let editingId = null;
 let currentRole = '';
 let staffSearchTimer = null;
+let memberSearchTimer = null;
+let selectedMemberId = null;
+let memberCandidates = [];
 
 const roleLabel = { SUPER_ADMIN: '슈퍼 관리자', ADMIN: '일반 관리자', TRAINER: '트레이너' };
 const roleBadge = { SUPER_ADMIN: 'badge-super', ADMIN: 'badge-admin', TRAINER: 'badge-trainer' };
+const WORK_STATUS_LABEL = { ACTIVE: '재직', LEAVE: '휴직', RESIGNED: '퇴사' };
+const WORK_STATUS_BADGE = { ACTIVE: 'badge-active', LEAVE: 'badge-pending', RESIGNED: 'badge-expired' };
 
 function csrfHeaders(extra) {
     return Object.assign({ 'Content-Type': 'application/json' }, extra);
+}
+function escHtml(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function formatPhone(phone) {
     if (!phone) return '';
@@ -614,7 +651,7 @@ function renderTable(staff, total) {
             <td><span class="badge ${roleBadge[s.role] || 'badge-trainer'}">${roleLabel[s.role] || s.role}</span></td>
             <td style="color:var(--text-secondary)">${s.assignedMemberCount != null ? s.assignedMemberCount + '명' : '-'}</td>
             <td>${s.hireDate || '-'}</td>
-            <td><span class="badge ${s.status === 'ACTIVE' ? 'badge-active' : 'badge-expired'}">${s.status === 'ACTIVE' ? '재직중' : '퇴직'}</span></td>
+            <td><span class="badge ${WORK_STATUS_BADGE[s.workStatus] || 'badge-active'}">${WORK_STATUS_LABEL[s.workStatus] || '재직'}</span></td>
             <td style="display:flex;gap:6px">
                 <button class="btn btn-secondary" style="padding:4px 9px;font-size:12px" onclick="editStaff('${s.id}')">수정</button>
                 ${s.role === 'TRAINER' ? `<button class="btn btn-secondary" style="padding:4px 9px;font-size:12px;color:var(--accent)" onclick="openDashboard('${s.id}','${(s.name||'').replace(/'/g,'')}')">상세</button>` : ''}
@@ -641,14 +678,70 @@ function goPage(p) { currentPage = p; loadStaff(); }
 
 function openModal() {
     editingId = null;
+    selectedMemberId = null;
+    memberCandidates = [];
     document.getElementById('modalTitle').textContent = '트레이너 등록';
-    ['sName','sPhone','sEmail'].forEach(fid => document.getElementById(fid).value = '');
+    document.getElementById('sMemberSearch').value = '';
+    document.getElementById('sMemberResults').style.display = 'none';
+    document.getElementById('sMemberResults').innerHTML = '';
+    document.getElementById('sMemberSelectedInfo').style.display = 'none';
+    document.getElementById('sMemberSearchGroup').style.display = '';
+    document.getElementById('sNameGroup').style.display = 'none';
+    document.getElementById('sPhoneGroup').style.display = 'none';
     document.getElementById('sEmailGroup').style.display = 'none';
     document.getElementById('sRegisterHint').style.display = '';
+    document.getElementById('sHireDate').value = '';
+    document.getElementById('sWorkStatus').value = 'ACTIVE';
+    document.getElementById('sResignationDate').value = '';
+    document.getElementById('sResignationDateGroup').style.display = 'none';
     document.getElementById('staffModal').classList.add('open');
 }
 
 function closeModal() { document.getElementById('staffModal').classList.remove('open'); }
+
+function debounceMemberSearch() {
+    clearTimeout(memberSearchTimer);
+    selectedMemberId = null;
+    document.getElementById('sMemberSelectedInfo').style.display = 'none';
+    const keyword = document.getElementById('sMemberSearch').value.trim();
+    if (!keyword) {
+        document.getElementById('sMemberResults').style.display = 'none';
+        document.getElementById('sMemberResults').innerHTML = '';
+        return;
+    }
+    memberSearchTimer = setTimeout(async () => {
+        const res = await fetch(`/api/staff/member-candidates?keyword=${encodeURIComponent(keyword)}`);
+        const json = await res.json();
+        memberCandidates = (json && json.data) || [];
+        const select = document.getElementById('sMemberResults');
+        if (!memberCandidates.length) {
+            select.innerHTML = `<option value="" disabled selected>일치하는 회원이 없습니다</option>`;
+            select.style.display = '';
+            return;
+        }
+        select.innerHTML = memberCandidates.map(m =>
+            `<option value="${m.id}">${m.name} (${formatPhone(m.phone) || '연락처 없음'})</option>`
+        ).join('');
+        select.style.display = '';
+    }, 300);
+}
+
+function onMemberCandidateSelected() {
+    const select = document.getElementById('sMemberResults');
+    const id = select.value;
+    const member = memberCandidates.find(m => m.id === id);
+    if (!member) return;
+    selectedMemberId = id;
+    const info = document.getElementById('sMemberSelectedInfo');
+    info.textContent = `선택됨: ${member.name} (${formatPhone(member.phone) || '연락처 없음'})`;
+    info.style.display = '';
+}
+
+function onWorkStatusChange() {
+    const isResigned = document.getElementById('sWorkStatus').value === 'RESIGNED';
+    document.getElementById('sResignationDateGroup').style.display = isResigned ? '' : 'none';
+    if (!isResigned) document.getElementById('sResignationDate').value = '';
+}
 
 async function editStaff(id) {
     const res = await fetch(`/api/staff/${id}`);
@@ -656,24 +749,41 @@ async function editStaff(id) {
     const s = json.data;
     editingId = id;
     document.getElementById('modalTitle').textContent = '트레이너 정보 수정';
+    document.getElementById('sMemberSearchGroup').style.display = 'none';
+    document.getElementById('sNameGroup').style.display = '';
+    document.getElementById('sPhoneGroup').style.display = '';
     document.getElementById('sName').value = s.name || '';
     document.getElementById('sPhone').value = formatPhone(s.phone) || '';
     document.getElementById('sEmail').value = s.email || '';
     document.getElementById('sEmailGroup').style.display = '';
     document.getElementById('sRegisterHint').style.display = 'none';
+    document.getElementById('sHireDate').value = s.hireDate || '';
+    document.getElementById('sWorkStatus').value = s.workStatus || 'ACTIVE';
+    document.getElementById('sResignationDate').value = s.resignationDate || '';
+    onWorkStatusChange();
     document.getElementById('staffModal').classList.add('open');
 }
 
 async function saveStaff() {
-    const name = document.getElementById('sName').value.trim();
-    const phone = document.getElementById('sPhone').value.trim();
-    if (!name || !phone) { alert('이름과 전화번호를 입력해주세요.'); return; }
+    const hireDate = document.getElementById('sHireDate').value;
+    const workStatus = document.getElementById('sWorkStatus').value;
+    const resignationDate = document.getElementById('sResignationDate').value;
+    if (workStatus === 'RESIGNED' && !resignationDate) { alert('퇴사일을 입력해주세요.'); return; }
 
-    const body = editingId
-        ? { name, phone, email: document.getElementById('sEmail').value }
-        : { name, phone };
-    const url    = editingId ? `/api/staff/${editingId}` : '/api/staff';
-    const method = editingId ? 'PUT' : 'POST';
+    let body, url, method;
+    if (editingId) {
+        const name = document.getElementById('sName').value.trim();
+        const phone = document.getElementById('sPhone').value.trim();
+        if (!name || !phone) { alert('이름과 전화번호를 입력해주세요.'); return; }
+        body = { name, phone, email: document.getElementById('sEmail').value, hireDate, workStatus, resignationDate: resignationDate || null };
+        url = `/api/staff/${editingId}`;
+        method = 'PUT';
+    } else {
+        if (!selectedMemberId) { alert('트레이너로 지정할 회원을 검색해서 선택해주세요.'); return; }
+        body = { memberId: selectedMemberId, hireDate, workStatus, resignationDate: resignationDate || null };
+        url = '/api/staff';
+        method = 'POST';
+    }
     const res = await fetch(url, { method, headers: csrfHeaders(), body: JSON.stringify(body) });
     const json = await res.json();
     if (!res.ok || (json && json.success === false)) { alert((json && json.message) || '저장에 실패했습니다.'); return; }
@@ -1152,6 +1262,31 @@ function closeDashboardModal() {
     dashboardTrainerId = null;
     document.getElementById('assignMemberSearch').value = '';
     document.getElementById('assignMemberResults').innerHTML = '';
+    document.getElementById('trainerMsgList').innerHTML = '';
+}
+
+async function loadTrainerMessages() {
+    const list = document.getElementById('trainerMsgList');
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">로딩 중...</div>';
+    const res  = await fetch(`/api/staff/${dashboardTrainerId}/messages`);
+    const json = await res.json();
+    const items = json.data || [];
+    if (!json.success) {
+        list.innerHTML = `<div style="color:var(--error);font-size:12px;padding:6px 0">${json.message || '조회에 실패했습니다.'}</div>`;
+        return;
+    }
+    if (!items.length) {
+        list.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:6px 0">주고받은 쪽지가 없습니다.</div>';
+        return;
+    }
+    list.innerHTML = items.map(m => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px">
+            <div style="display:flex;justify-content:space-between;color:var(--text-muted);margin-bottom:2px">
+                <span>${m.fromTrainer ? '트레이너 →' : m.memberName + ' →'} ${m.fromTrainer ? m.memberName : '트레이너'}</span>
+                <span>${(m.createdAt || '').replace('T', ' ').substring(0, 16)}</span>
+            </div>
+            <div>${escHtml(m.content || '')}</div>
+        </div>`).join('');
 }
 
 // ── 회원 배정 (담당 트레이너 지정) ─────────────────────────────
@@ -1374,6 +1509,13 @@ async function deleteHistRecord(id) {
                     <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="searchAssignMembers()">검색</button>
                 </div>
                 <div id="assignMemberResults" style="margin-top:8px;max-height:160px;overflow-y:auto"></div>
+            </div>
+            <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px">쪽지내역 (회원과 주고받은 쪽지, 읽기전용)</span>
+                    <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px" onclick="loadTrainerMessages()">보기</button>
+                </div>
+                <div id="trainerMsgList" style="max-height:200px;overflow-y:auto"></div>
             </div>
         </div>
         <div class="modal-footer">

@@ -42,6 +42,13 @@ public interface CrmUserMapper {
     // user_gym 기준 — 최초 발급 이후 소속이 바뀌었을 가능성 대비)
     int reactivateAsTrainer(@Param("id") String id, @Param("gymId") Long gymId);
 
+    // 트레이너 지정/수정 시 입사일·근무상태·퇴사일 저장 (appUserId 기준 — crm_users의 PK가 아니라
+    // 트레이너 본인 앱 계정 id로 갱신하는 편이 호출부에서 crm_users.id를 별도 조회할 필요가 없어 간단함)
+    int updateEmploymentByAppUserId(@Param("appUserId") String appUserId,
+                                     @Param("hireDate") java.time.LocalDate hireDate,
+                                     @Param("workStatus") String workStatus,
+                                     @Param("resignationDate") java.time.LocalDate resignationDate);
+
     // 트레이너 권한 회수 시 CRM 로그인 계정 비활성화 (계정 자체는 보존)
     int deactivateByAppUserId(@Param("appUserId") String appUserId);
 

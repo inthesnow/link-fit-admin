@@ -24,10 +24,14 @@
         .at-tab:hover  { color: var(--text-primary); }
         .at-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-        /* ── 요약 카드 ── */
-        .attend-summary {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+        /* ── 요약 카드 + 추이 그래프 (한 줄, 절반씩) ── */
+        .attend-header-row {
+            display: flex; gap: 16px;
             padding: 16px 24px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .attend-summary {
+            flex: 1 1 50%; min-width: 0;
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
         }
         .attend-card {
             background: var(--surface); border: 1px solid var(--border);
@@ -60,8 +64,8 @@
         .wc-date { font-size:15px; font-weight:700; color:var(--text-primary); }
         .wc-cnt  { font-size:11px; color:var(--accent); font-weight:600; }
 
-        /* ── 트렌드 ── */
-        .trend-section { padding:16px 24px; border-bottom:1px solid var(--border); flex-shrink:0; }
+        /* ── 트렌드 (요약 카드 옆, 절반) ── */
+        .trend-section { flex: 1 1 50%; min-width: 0; }
         .trend-title   { font-size:12px; font-weight:600; color:var(--text-muted); margin-bottom:10px; }
         .trend-canvas-wrap { position:relative; height:130px; }
 
@@ -87,7 +91,7 @@
         .freeze-date-input { padding:5px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
 
         @media(max-width:768px){
-            .attend-summary { grid-template-columns:repeat(2,1fr); }
+            .attend-header-row { flex-direction: column; }
         }
     </style>
 </head>
@@ -112,28 +116,6 @@
         </div>
     </header>
 
-    <!-- 요약 카드 -->
-    <div class="attend-summary">
-        <div class="attend-card">
-            <div class="attend-card-label">전체 출석</div>
-            <div class="attend-card-value" id="sumTotal">-</div>
-            <div class="attend-card-sub" id="sumGender"></div>
-        </div>
-        <div class="attend-card">
-            <div class="attend-card-label">회원권 출석</div>
-            <div class="attend-card-value" id="sumMembership">-</div>
-        </div>
-        <div class="attend-card">
-            <div class="attend-card-label">루틴 수업 출석</div>
-            <div class="attend-card-value" id="sumClass">-</div>
-        </div>
-        <div class="attend-card">
-            <div class="attend-card-label">유증 회원</div>
-            <div class="attend-card-value" id="sumFrozen">-</div>
-            <div class="attend-card-sub" style="color:var(--warning)">오늘 기준</div>
-        </div>
-    </div>
-
     <!-- 메인 탭 -->
     <div class="at-tab-nav">
         <button class="at-tab active" id="atTab-daily"    onclick="setAtTab('daily',this)">출석 현황</button>
@@ -145,40 +127,37 @@
     <!-- ─── 패널: 출석 현황 ─── -->
     <div id="panel-daily" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
 
-        <!-- 기간 탭 -->
-        <div class="period-tabs">
-            <button class="period-tab active" onclick="setPeriod('daily',this)">일별</button>
-            <button class="period-tab"        onclick="setPeriod('weekly',this)">주간</button>
-            <button class="period-tab"        onclick="setPeriod('monthly',this)">월별</button>
-        </div>
-
-        <!-- 주간 달력 (일별/주간 모드) -->
-        <div id="weekCalSection">
-            <div class="week-nav">
-                <button class="date-btn" onclick="moveWeek(-1)">&#8249;</button>
-                <span style="font-size:13px;font-weight:600;color:var(--text-secondary)" id="weekLabel"></span>
-                <button class="date-btn" onclick="moveWeek(1)">&#8250;</button>
+        <!-- 요약 카드(2x2) + 최근 30일 출석 추이(일별 모드) -->
+        <div class="attend-header-row">
+            <div class="attend-summary">
+                <div class="attend-card">
+                    <div class="attend-card-label">전체 출석</div>
+                    <div class="attend-card-value" id="sumTotal">-</div>
+                    <div class="attend-card-sub" id="sumGender"></div>
+                </div>
+                <div class="attend-card">
+                    <div class="attend-card-label">회원권 출석</div>
+                    <div class="attend-card-value" id="sumMembership">-</div>
+                </div>
+                <div class="attend-card">
+                    <div class="attend-card-label">루틴 수업 출석</div>
+                    <div class="attend-card-value" id="sumClass">-</div>
+                </div>
+                <div class="attend-card">
+                    <div class="attend-card-label">유증 회원</div>
+                    <div class="attend-card-value" id="sumFrozen">-</div>
+                    <div class="attend-card-sub" style="color:var(--warning)">오늘 기준</div>
+                </div>
             </div>
-            <div class="week-grid" id="weekGrid"></div>
-        </div>
-
-        <!-- 월 네비게이션 (월별 모드) -->
-        <div id="monthNavSection" style="display:none">
-            <div class="week-nav">
-                <button class="date-btn" onclick="moveMonth(-1)">&#8249;</button>
-                <span style="font-size:13px;font-weight:600;color:var(--text-secondary)" id="monthLabel"></span>
-                <button class="date-btn" onclick="moveMonth(1)">&#8250;</button>
+            <div id="trendSection" class="trend-section">
+                <div class="trend-title">최근 30일 출석 추이</div>
+                <div class="trend-canvas-wrap"><canvas id="trendChart"></canvas></div>
             </div>
-        </div>
-
-        <!-- 30일 트렌드 (일별 모드) -->
-        <div id="trendSection" class="trend-section">
-            <div class="trend-title">최근 30일 출석 추이</div>
-            <div class="trend-canvas-wrap"><canvas id="trendChart"></canvas></div>
         </div>
 
         <!-- 테이블 -->
         <div class="search-bar" style="flex-shrink:0">
+            <span style="font-size:13px;font-weight:600;color:var(--text-secondary)" id="todayLabel"></span>
             <select class="filter-select" id="typeFilter" onchange="loadAttendance()">
                 <option value="">전체</option>
                 <option value="MEMBERSHIP">회원권</option>
@@ -205,20 +184,46 @@
 
     <!-- ─── 패널: 회원별 현황 ─── -->
     <div id="panel-member" style="display:none;overflow:auto;flex:1">
+
+        <!-- 기간 탭 -->
+        <div class="period-tabs">
+            <button class="period-tab"        onclick="setMemberPeriod('daily',this)">일별</button>
+            <button class="period-tab"        onclick="setMemberPeriod('weekly',this)">주간</button>
+            <button class="period-tab active" onclick="setMemberPeriod('monthly',this)">월별</button>
+        </div>
+
+        <!-- 주간 달력 (일별/주간 모드) -->
+        <div id="msWeekCalSection" style="display:none">
+            <div class="week-nav">
+                <button class="date-btn" onclick="moveMemberWeek(-1)">&#8249;</button>
+                <span style="font-size:13px;font-weight:600;color:var(--text-secondary)" id="msWeekLabel"></span>
+                <button class="date-btn" onclick="moveMemberWeek(1)">&#8250;</button>
+            </div>
+            <div class="week-grid" id="msWeekGrid"></div>
+        </div>
+
+        <!-- 월 네비게이션 (월별 모드) -->
+        <div id="msMonthNavSection">
+            <div class="week-nav">
+                <button class="date-btn" onclick="moveMemberMonth(-1)">&#8249;</button>
+                <span style="font-size:13px;font-weight:600;color:var(--text-secondary)" id="msMonthLabel"></span>
+                <button class="date-btn" onclick="moveMemberMonth(1)">&#8250;</button>
+            </div>
+        </div>
+
         <div class="ms-header">
-            <input type="month" class="form-input" id="memberStatsMonth" style="width:160px" onchange="loadMemberStats()">
-            <span style="font-size:12px;color:var(--text-muted)">해당 월 회원별 출석 횟수</span>
+            <span style="font-size:12px;color:var(--text-muted)" id="msPeriodDesc">해당 월 회원별 출석 횟수</span>
         </div>
         <div class="table-wrap" style="margin:16px 24px 32px">
             <table>
                 <thead>
                     <tr>
                         <th>이름</th><th>성별</th><th>등급</th>
-                        <th>출석 횟수</th><th>이행률 (30회 기준)</th><th>마지막 출석</th>
+                        <th>출석 횟수</th><th id="msRateHeader">이행률 (30회 기준)</th><th>마지막 출석</th>
                     </tr>
                 </thead>
                 <tbody id="memberStatsBody">
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">월을 선택해주세요.</td></tr>
+                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">로딩 중...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -361,12 +366,14 @@ const genderLabel = { M: '남성', F: '여성', 남자: '남성', 여자: '여�
 const tierLabel   = { BASIC: 'BASIC', LIGHT_FIT: 'LIGHT', REGULAR_FIT: 'REGULAR', INTENSIVE_FIT: 'INTENSIVE' };
 const tierBadge   = { BASIC: 'badge-pending', LIGHT_FIT: 'badge-active', REGULAR_FIT: 'badge-admin', INTENSIVE_FIT: 'badge-super' };
 
-let currentPeriod = 'daily';
-let selectedDate  = fmt(new Date());
-let weekOffset    = 0;
-let monthOffset   = 0;
-let weekCountMap  = {};
 let trendChart    = null;
+
+// 회원별 현황(패널2) 전용 기간 상태 — 출석현황(패널1)에 있던 일별/주간/월별 선택이 이쪽으로 이동됨
+let msCurrentPeriod = 'monthly';
+let msSelectedDate  = fmt(new Date());
+let msWeekOffset    = 0;
+let msMonthOffset   = 0;
+let msWeekCountMap  = {};
 
 /* ── 탭 전환 ──────────────────────────────────────────────── */
 function setAtTab(tab, btn) {
@@ -380,111 +387,17 @@ function setAtTab(tab, btn) {
 }
 
 /* ─────────────────────────────────────────────────────────
-   패널 1: 출석 현황
+   패널 1: 출석 현황 — 오늘 하루 고정(날짜 선택 없음, 일별/주간/월별은 회원별 현황으로 이동)
 ─────────────────────────────────────────────────────────── */
-
-/* 기간 탭 */
-function setPeriod(period, btn) {
-    currentPeriod = period;
-    document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const isMonthly = period === 'monthly';
-    document.getElementById('weekCalSection').style.display  = isMonthly ? 'none' : '';
-    document.getElementById('monthNavSection').style.display = isMonthly ? ''     : 'none';
-    document.getElementById('trendSection').style.display    = period === 'daily' ? '' : 'none';
-    if (isMonthly) renderMonthLabel();
-    loadAttendance();
-}
-
-/* 주간 달력 */
 const DAY_KO = ['일','월','화','수','목','금','토'];
 
-function getWeekStart(offset) {
-    const d = new Date();
-    d.setDate(d.getDate() - d.getDay() + offset * 7);
-    d.setHours(0,0,0,0);
-    return d;
-}
-
-function renderWeekGrid() {
-    const start = getWeekStart(weekOffset);
-    const end   = new Date(start); end.setDate(end.getDate() + 6);
-    document.getElementById('weekLabel').textContent =
-        `${fmt(start).slice(5).replace('-','/')} ~ ${fmt(end).slice(5).replace('-','/')}`;
-    const todayStr = fmt(new Date());
-    let cells = '';
-    for (let i = 0; i < 7; i++) {
-        const d  = new Date(start); d.setDate(d.getDate() + i);
-        const ds = fmt(d);
-        const cnt = weekCountMap[ds] ?? '';
-        const cls = ['week-cell', ds === todayStr ? 'today' : '', ds === selectedDate ? 'selected' : ''].filter(Boolean).join(' ');
-        cells += `<div class="${cls}" onclick="selectDate('${ds}')">
-            <span class="wc-day">${DAY_KO[d.getDay()]}</span>
-            <span class="wc-date">${d.getDate()}</span>
-            <span class="wc-cnt">${cnt !== '' ? cnt + '명' : ''}</span>
-        </div>`;
-    }
-    document.getElementById('weekGrid').innerHTML = cells;
-}
-
-async function loadWeekCounts() {
-    const start = fmt(getWeekStart(weekOffset));
-    const endD  = new Date(getWeekStart(weekOffset)); endD.setDate(endD.getDate() + 6);
-    const end   = fmt(endD);
-    try {
-        const res  = await fetch(`/api/attendance/trend?startDate=${start}&endDate=${end}`);
-        const json = await res.json();
-        weekCountMap = {};
-        (json.data || []).forEach(r => { weekCountMap[r.date] = Number(r.cnt); });
-    } catch(e) {}
-    renderWeekGrid();
-}
-
-function selectDate(ds) {
-    selectedDate = ds;
-    renderWeekGrid();
-    loadAttendance();
-}
-
-function moveWeek(dir) {
-    weekOffset += dir;
-    weekCountMap = {};
-    renderWeekGrid();
-    loadWeekCounts();
-}
-
-/* 월별 네비 */
-function getMonthDate(offset) {
-    const d = new Date();
-    d.setDate(1);
-    d.setMonth(d.getMonth() + offset);
-    return d;
-}
-
-function renderMonthLabel() {
-    const d = getMonthDate(monthOffset);
-    document.getElementById('monthLabel').textContent =
-        `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
-}
-
-function moveMonth(dir) {
-    monthOffset += dir;
-    renderMonthLabel();
-    loadAttendance();
-}
-
-/* 출석 데이터 로드 */
+/* 출석 데이터 로드 (항상 오늘) */
 async function loadAttendance() {
-    let dateParam = selectedDate;
-    let periodParam = currentPeriod;
-
-    if (currentPeriod === 'monthly') {
-        const d = getMonthDate(monthOffset);
-        dateParam = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-    }
+    const dateParam = fmt(new Date());
+    document.getElementById('todayLabel').textContent = `오늘 (${dateParam})`;
 
     try {
-        const res  = await fetch(`/api/attendance?date=${dateParam}&period=${periodParam}`);
+        const res  = await fetch(`/api/attendance?date=${dateParam}&period=daily`);
         const json = await res.json();
         const data = json.data || [];
 
@@ -583,7 +496,7 @@ async function checkIn() {
     await fetch('/api/attendance', { method: 'POST', headers: csrfHeaders(), body: JSON.stringify(body) });
     closeCheckInModal();
     loadAttendance();
-    loadWeekCounts();
+    loadTrend();
     loadFrozenCount();
 }
 
@@ -591,28 +504,120 @@ async function cancelAttend(id) {
     if (!confirm('출석을 취소하시겠습니까?')) return;
     await fetch(`/api/attendance/${id}`, { method: 'DELETE', headers: csrfHeaders() });
     loadAttendance();
-    loadWeekCounts();
+    loadTrend();
 }
 
 /* ─────────────────────────────────────────────────────────
-   패널 2: 회원별 현황
+   패널 2: 회원별 현황 — 일별/주간/월별 (패널1에서 이동됨)
 ─────────────────────────────────────────────────────────── */
+function setMemberPeriod(period, btn) {
+    msCurrentPeriod = period;
+    document.querySelectorAll('#panel-member .period-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const isMonthly = period === 'monthly';
+    document.getElementById('msWeekCalSection').style.display  = isMonthly ? 'none' : '';
+    document.getElementById('msMonthNavSection').style.display = isMonthly ? ''     : 'none';
+    const rateBase = period === 'daily' ? 1 : period === 'weekly' ? 7 : 30;
+    document.getElementById('msRateHeader').textContent = `이행률 (${rateBase}회 기준)`;
+    document.getElementById('msPeriodDesc').textContent =
+        period === 'daily' ? '해당 일 회원별 출석 현황' : period === 'weekly' ? '해당 주 회원별 출석 횟수' : '해당 월 회원별 출석 횟수';
+    if (isMonthly) { renderMemberMonthLabel(); } else { loadMemberWeekCounts(); }
+    loadMemberStats();
+}
+
+function getMemberWeekStart(offset) {
+    const d = new Date();
+    d.setDate(d.getDate() - d.getDay() + offset * 7);
+    d.setHours(0,0,0,0);
+    return d;
+}
+
+function renderMemberWeekGrid() {
+    const start = getMemberWeekStart(msWeekOffset);
+    const end   = new Date(start); end.setDate(end.getDate() + 6);
+    document.getElementById('msWeekLabel').textContent =
+        `${fmt(start).slice(5).replace('-','/')} ~ ${fmt(end).slice(5).replace('-','/')}`;
+    const todayStr = fmt(new Date());
+    let cells = '';
+    for (let i = 0; i < 7; i++) {
+        const d  = new Date(start); d.setDate(d.getDate() + i);
+        const ds = fmt(d);
+        const cnt = msWeekCountMap[ds] ?? '';
+        const cls = ['week-cell', ds === todayStr ? 'today' : '', ds === msSelectedDate ? 'selected' : ''].filter(Boolean).join(' ');
+        cells += `<div class="${cls}" onclick="selectMemberDate('${ds}')">
+            <span class="wc-day">${DAY_KO[d.getDay()]}</span>
+            <span class="wc-date">${d.getDate()}</span>
+            <span class="wc-cnt">${cnt !== '' ? cnt + '명' : ''}</span>
+        </div>`;
+    }
+    document.getElementById('msWeekGrid').innerHTML = cells;
+}
+
+async function loadMemberWeekCounts() {
+    const start = fmt(getMemberWeekStart(msWeekOffset));
+    const endD  = new Date(getMemberWeekStart(msWeekOffset)); endD.setDate(endD.getDate() + 6);
+    const end   = fmt(endD);
+    try {
+        const res  = await fetch(`/api/attendance/trend?startDate=${start}&endDate=${end}`);
+        const json = await res.json();
+        msWeekCountMap = {};
+        (json.data || []).forEach(r => { msWeekCountMap[r.date] = Number(r.cnt); });
+    } catch(e) {}
+    renderMemberWeekGrid();
+}
+
+function selectMemberDate(ds) {
+    msSelectedDate = ds;
+    renderMemberWeekGrid();
+    loadMemberStats();
+}
+
+function moveMemberWeek(dir) {
+    msWeekOffset += dir;
+    msWeekCountMap = {};
+    renderMemberWeekGrid();
+    loadMemberWeekCounts();
+}
+
+function getMemberMonthDate(offset) {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + offset);
+    return d;
+}
+
+function renderMemberMonthLabel() {
+    const d = getMemberMonthDate(msMonthOffset);
+    document.getElementById('msMonthLabel').textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+}
+
+function moveMemberMonth(dir) {
+    msMonthOffset += dir;
+    renderMemberMonthLabel();
+    loadMemberStats();
+}
+
 async function loadMemberStats() {
-    const month = document.getElementById('memberStatsMonth').value;
-    const body  = document.getElementById('memberStatsBody');
+    let dateParam = msSelectedDate;
+    if (msCurrentPeriod === 'monthly') {
+        const d = getMemberMonthDate(msMonthOffset);
+        dateParam = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    }
+    const body = document.getElementById('memberStatsBody');
     body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted)">로딩 중...</td></tr>`;
     body.dataset.loaded = '1';
     try {
-        const res  = await fetch(`/api/attendance/member-stats?yearMonth=${month}`);
+        const res  = await fetch(`/api/attendance/member-stats?date=${dateParam}&period=${msCurrentPeriod}`);
         const json = await res.json();
         const data = json.data || [];
         if (!data.length) {
             body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted)">데이터가 없습니다.</td></tr>`;
             return;
         }
+        const rateBase = msCurrentPeriod === 'daily' ? 1 : msCurrentPeriod === 'weekly' ? 7 : 30;
         body.innerHTML = data.map(m => {
             const cnt  = Number(m.attendCount || 0);
-            const pct  = Math.min(100, Math.round(cnt / 30 * 100));
+            const pct  = Math.min(100, Math.round(cnt / rateBase * 100));
             const color = pct >= 70 ? 'var(--success)' : pct >= 40 ? 'var(--warning)' : 'var(--error)';
             const last  = m.lastAttend ? String(m.lastAttend).substring(0,10) : '미출석';
             return `<tr>
@@ -760,11 +765,9 @@ function closeSidebar() {
 }
 
 /* ── 초기화 ── */
-// 월 인풋 기본값
-document.getElementById('memberStatsMonth').value = fmt(new Date()).slice(0, 7);
 document.getElementById('freezeDate').valueAsDate = new Date();
 
-loadWeekCounts();
+renderMemberMonthLabel();
 loadAttendance();
 loadTrend();
 loadFrozenCount();

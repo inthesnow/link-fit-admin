@@ -18,30 +18,30 @@ public class MyBatisProductPackageService implements ProductPackageService {
     }
 
     @Override
-    public List<ProductPackage> findAll() {
-        return mapper.findAll();
+    public List<ProductPackage> findAll(Long gymId) {
+        return mapper.findAll(gymId);
     }
 
     @Override
-    public Optional<ProductPackage> findById(Long id) {
-        return mapper.findById(id);
+    public Optional<ProductPackage> findById(Long id, Long gymId) {
+        return mapper.findById(id, gymId);
     }
 
     @Override
-    public ProductPackage save(ProductPackage pkg) {
-        mapper.insert(pkg);
+    public ProductPackage save(ProductPackage pkg, Long gymId) {
+        mapper.insert(pkg, gymId);
         return pkg;
     }
 
     @Override
-    public ProductPackage update(Long id, ProductPackage pkg) {
+    public ProductPackage update(Long id, ProductPackage pkg, Long gymId) {
         pkg.setId(id);
-        mapper.update(pkg);
+        mapper.update(pkg, gymId);
         return pkg;
     }
 
     @Override
-    public void delete(Long id) {
-        mapper.delete(id);
+    public void delete(Long id, Long gymId) {
+        mapper.delete(id, gymId);
     }
 }
