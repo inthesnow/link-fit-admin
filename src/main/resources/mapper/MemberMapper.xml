@@ -218,6 +218,21 @@
         SET up.trainer_id=#{trainerId} WHERE up.user_id=#{id}
     </update>
 
+    <!-- trainer_members 동기화용 3종 — MyBatisMemberService.updateAssignedTrainer에서 순서대로 호출 -->
+    <select id="findTrainerMemberType" resultType="string">
+        SELECT member_type FROM trainer_members WHERE member_id = #{memberId} LIMIT 1
+    </select>
+
+    <delete id="deleteTrainerMembersByMember">
+        DELETE FROM trainer_members WHERE member_id = #{memberId}
+    </delete>
+
+    <insert id="insertTrainerMember">
+        INSERT INTO trainer_members (trainer_id, member_id, member_type)
+        VALUES (#{trainerId}, #{memberId}, #{memberType})
+        ON DUPLICATE KEY UPDATE member_type = #{memberType}
+    </insert>
+
     <update id="withdraw">
         UPDATE users u
         JOIN user_gym ug ON ug.user_id = u.user_id AND ug.gym_id = #{gymId} AND ug.is_active = 1

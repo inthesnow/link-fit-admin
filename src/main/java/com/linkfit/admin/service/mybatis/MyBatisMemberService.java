@@ -127,9 +127,20 @@ public class MyBatisMemberService implements MemberService {
         memberMapper.updateRole(id, role, gymId);
     }
 
+    // CRM에서 담당 트레이너를 바꿀 때 user_profiles.trainer_id만 갱신하고 trainer_members는
+    // 그대로 둬서, 원포인트 요청·트레이너 앱 담당회원 목록이 옛 트레이너 기준으로 남던 문제
+    // 수정(2026-09-08). 앱 자율 배정(TrainerService.assignTrainerByMember)과 동일하게
+    // 기존 member_type을 유지하고, 없으면 ONE_POINT를 기본값으로 삼는다.
     @Override
+    @Transactional
     public void updateAssignedTrainer(String id, String trainerId, Long gymId) {
         memberMapper.updateAssignedTrainer(id, trainerId, gymId);
+        String memberType = memberMapper.findTrainerMemberType(id);
+        if (memberType == null) {
+            memberType = "ONE_POINT";
+        }
+        memberMapper.deleteTrainerMembersByMember(id);
+        memberMapper.insertTrainerMember(trainerId, id, memberType);
     }
 
     @Override

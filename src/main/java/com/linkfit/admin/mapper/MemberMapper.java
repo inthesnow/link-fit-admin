@@ -40,6 +40,14 @@ public interface MemberMapper {
     int updateMemberType(@Param("id") String id, @Param("memberType") String memberType, @Param("gymId") Long gymId);
     int updateRole(@Param("id") String id, @Param("role") String role, @Param("gymId") Long gymId);
     int updateAssignedTrainer(@Param("id") String id, @Param("trainerId") String trainerId, @Param("gymId") Long gymId);
+
+    // trainer_members 동기화용 (updateAssignedTrainer가 user_profiles만 갱신하고 이 테이블은
+    // 건드리지 않아 원포인트 요청/트레이너 앱 담당회원 목록이 옛 트레이너 기준으로 남던 문제 수정,
+    // 2026-09-08). lof-backend TrainerService.assignTrainerByMember와 동일한 패턴.
+    String findTrainerMemberType(@Param("memberId") String memberId);
+    void deleteTrainerMembersByMember(@Param("memberId") String memberId);
+    void insertTrainerMember(@Param("trainerId") String trainerId, @Param("memberId") String memberId,
+                              @Param("memberType") String memberType);
     int withdraw(@Param("id") String id, @Param("gymId") Long gymId);
     void insertFreeze(@Param("memberId") String memberId, @Param("freezeStart") String freezeStart,
                       @Param("freezeEnd") String freezeEnd, @Param("reason") String reason);
